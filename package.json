@@ -1,0 +1,12 @@
+{
+  "name": "romana-admin-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "check": "npm --prefix backend run check && npm --prefix frontend run check",
+    "test": "npm --prefix backend test"
+  }
+}
