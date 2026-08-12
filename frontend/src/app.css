@@ -16,21 +16,16 @@
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input { font: inherit; }
 button { cursor: pointer; }
+button:disabled { cursor: wait; opacity: .72; }
 svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.loading-screen { display: grid; min-height: 100vh; place-items: center; color: var(--muted); background: #fbfaf6; font-size: 14px; font-weight: 600; }
 .eyebrow { margin: 0 0 12px; color: var(--red); font-size: 12px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }
 .muted { margin: 10px 0 0; color: var(--muted); font-size: 15px; line-height: 1.6; }
 
 .login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.1fr); }
-.brand-panel { position: relative; isolation: isolate; display: flex; min-height: 100vh; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 52px clamp(36px, 6vw, 90px); color: white; background: var(--red); }
-.brand-panel::before { content: ""; position: absolute; z-index: -1; inset: 0; opacity: .12; background-image: radial-gradient(#fff 0.7px, transparent .7px); background-size: 8px 8px; }
-.brand-panel::after { content: "R"; position: absolute; z-index: -1; right: -38px; bottom: -150px; color: rgba(255,255,255,.06); font-family: "Libre Caslon Display", serif; font-size: min(56vw, 620px); line-height: 1; }
-.brand-mark span, .sidebar-brand span, .mobile-brand span { font-family: "Libre Caslon Display", Georgia, serif; font-size: 38px; font-style: italic; font-weight: 600; }
-.brand-mark span { display: inline-block; padding: 4px 15px 7px 9px; color: var(--red); background: white; transform: rotate(-2deg); }
-.brand-copy { max-width: 570px; }
-.brand-copy .eyebrow { color: #ffd9d7; }
-.brand-copy h1 { max-width: 550px; margin: 0; font-family: "Libre Caslon Display", Georgia, serif; font-size: clamp(44px, 5vw, 74px); font-weight: 400; line-height: 1.02; }
-.brand-copy > p:last-child { max-width: 450px; margin: 24px 0 0; color: #ffeceb; font-size: 17px; line-height: 1.65; }
-.brand-footer { margin: 0; color: #ffd9d7; font-size: 12px; font-weight: 600; }
+.brand-panel { min-height: 100vh; padding: 16px 24px; background: url("/backround.png") center / cover no-repeat; }
+.sidebar-brand span { font-family: "Libre Caslon Display", Georgia, serif; font-size: 38px; font-style: italic; font-weight: 600; }
+.brand-logo { display: block; width: 256px; height: auto; }
 .login-panel { display: grid; place-items: center; padding: 48px; background: #fbfaf6; }
 .login-wrap { width: min(100%, 440px); }
 .login-wrap h2 { margin: 0; font-family: "Libre Caslon Display", Georgia, serif; font-size: 42px; font-weight: 400; line-height: 1.12; }
@@ -92,7 +87,8 @@ svg { width: 20px; height: 20px; flex: 0 0 auto; }
   .login-page { grid-template-columns: 1fr; }
   .brand-panel { display: none; }
   .login-panel { min-height: 100vh; padding: 36px 24px; }
-  .mobile-brand { display: flex; align-items: baseline; gap: 10px; margin-bottom: 58px; color: var(--red); }
+  .mobile-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 58px; }
+  .mobile-brand .brand-logo { width: 150px; }
   .mobile-brand small { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
   .login-wrap h2 { font-size: 36px; }
   .app-shell { grid-template-columns: 1fr; }

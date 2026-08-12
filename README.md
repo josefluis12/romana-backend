@@ -1,57 +1,75 @@
 # Romana Shop Admin
 
-The private operations portal for the Romana online shop.
+The private administration system for the Romana online shop. It consists of two
+independent TypeScript applications.
 
-## Project structure
+## Architecture
 
 ```text
 backend/
-  src/      TypeScript server and business logic
-  test/     Backend unit and integration tests
-  dist/     Compiled JavaScript (generated)
-public/     Static assets for the admin interface
+  src/           Express API, authentication, and business logic
+  test/          Backend tests
+  supabase/      Supabase config, migrations, and seed data
+  .env           Backend-only environment values (ignored)
+  package.json   Backend dependencies and commands
+frontend/
+  src/           React admin interface
+  public/        Browser assets
+  package.json   Frontend dependencies and commands
 ```
 
-All authentication, authorization, validation, data access, and future shop business
-logic belongs under `backend/src`. The `public` folder contains browser assets only.
+The frontend calls relative `/api/*` endpoints. Vite proxies those requests to the
+backend during development. Supabase access, administrator authorization, session
+cookies, validation, data access, and all shop business rules belong in `backend/`.
+The frontend does not import backend modules or receive Supabase credentials.
 
-## Local development
+## Supabase
+
+Copy the backend environment template and add the hosted project values:
 
 ```bash
-npm install
-cp .env.example .env
-npm run dev
+cp backend/.env.example backend/.env
 ```
 
-Create the administrator in Supabase Authentication, then put the project's URL and
-publishable key in `.env`. Open `http://localhost:4322` and sign in with that user's
-email and password. A legacy anon key can be supplied as `SUPABASE_ANON_KEY` if the
-project does not yet expose a publishable key. Set `ADMIN_EMAILS` to a comma-separated
-allowlist of users permitted to enter the operations portal.
+Required backend variables:
 
-Never put the Supabase service-role key in this application. The server refuses to
-start in production if the project URL, public key, or administrator allowlist is
-missing.
+- `SUPABASE_URL`: the project URL
+- `SUPABASE_PUBLISHABLE_KEY`: the publishable key; a legacy anon key is also accepted
+- `ADMIN_EMAILS`: comma-separated Supabase Auth users allowed into the admin portal
+- `FRONTEND_ORIGIN`: the permitted admin frontend origin
 
-## Current scope
+Create each administrator as an email/password user in Supabase Authentication and
+include their normalized email in `ADMIN_EMAILS`. Never put a secret or service-role
+key in the frontend or commit it to this repository.
 
-- Secure administrator sign-in and sign-out
-- Supabase email/password authentication
-- HTTP-only, same-site access and refresh token cookies
-- Server-side token validation and automatic session refresh
-- CSRF-protected sign-out
-- Sign-in throttling and baseline security headers
-- Responsive shop overview shell
+Supabase CLI state is scoped to `backend/supabase`. Run Supabase commands from the
+`backend` directory so future migrations remain part of the backend application.
 
-Login throttling is held in memory for this first single-instance portal slice. Move
-it to a shared rate-limit store when deploying across multiple server instances.
+## Development
 
-## Commands
+Install each application independently:
 
 ```bash
-npm run dev        # Run the TypeScript backend with file watching
-npm run typecheck  # Validate strict TypeScript types
-npm test           # Run backend tests
-npm run build      # Compile backend/src into backend/dist
-npm start          # Run the compiled backend
+npm install --prefix backend
+npm install --prefix frontend
+```
+
+Run the applications in separate terminals:
+
+```bash
+npm run dev:backend
+npm run dev:frontend
+```
+
+- Admin frontend: `http://localhost:5173`
+- Admin API: `http://localhost:4322/api`
+- API health: `http://localhost:4322/api/health`
+
+## Verification
+
+From the repository root:
+
+```bash
+npm run check
+npm run build
 ```
