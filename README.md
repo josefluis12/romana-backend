@@ -35,8 +35,17 @@ Required backend variables:
 
 - `SUPABASE_URL`: the project URL
 - `SUPABASE_PUBLISHABLE_KEY`: the publishable key; a legacy anon key is also accepted
+- `SUPABASE_SECRET_KEY`: a backend-only secret key used to persist paid orders and customers
 - `FRONTEND_ORIGIN`: the permitted admin frontend origin
 - `STOREFRONT_ORIGIN`: the permitted public storefront origin
+- `MAYA_API_URL`: Maya Checkout API origin; use `https://pg-sandbox.paymaya.com` for sandbox
+- `MAYA_PUBLIC_KEY`: the Maya Checkout public key used only by the backend; local sandbox development falls back to Maya's published shared test key
+
+Register `https://your-backend.example/api/webhooks/maya` for Maya's
+`PAYMENT_SUCCESS` event. The backend verifies the reported payment with Maya before
+creating an order. Webhook retries are idempotent, and customer email addresses are
+normalized so each unique email maps to one customer record. Never expose the
+Supabase secret key to either frontend.
 
 Create administrators as email/password users in Supabase Authentication. Any user
 successfully authenticated by this Supabase project can access the admin portal.
@@ -45,7 +54,7 @@ Never put a secret or service-role key in the frontend or commit it to this repo
 Supabase CLI state is scoped to `backend/supabase`. Run Supabase commands from the
 `backend` directory so future migrations remain part of the backend application.
 
-Apply the checked-in migrations before using catalog management:
+Apply the checked-in migrations before using catalog or order management:
 
 ```bash
 cd backend

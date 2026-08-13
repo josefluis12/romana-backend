@@ -13,13 +13,19 @@ import {
 } from "./security.js";
 import { createSupabaseAuth, type AuthService } from "./supabase-auth.js";
 import { createSupabaseProductRepository, type ProductRepository } from "./repositories/products.js";
+import { createSupabaseOrderRepository, type OrderRepository } from "./repositories/orders.js";
 import { validateProductInput } from "./schemas/product.js";
 import { createSupabaseProductImageStorage, detectImageType, type ProductImageStorage } from "./services/product-images.js";
+import { createMayaCheckoutService, type MayaCheckoutService } from "./services/maya-checkout.js";
+import { createStorefrontCheckout, StorefrontCheckoutError } from "./services/storefront-checkout.js";
+import { handleMayaWebhook, MayaWebhookError } from "./services/maya-webhook.js";
 
 interface AppDependencies {
   auth?: AuthService;
   products?: ProductRepository;
   productImages?: ProductImageStorage;
+  maya?: MayaCheckoutService;
+  orders?: OrderRepository;
 }
 
 interface ResolvedSession {
@@ -32,9 +38,12 @@ export function createApp({
   auth = createSupabaseAuth({ url: config.supabaseUrl, key: config.supabaseKey }),
   products = createSupabaseProductRepository(config.supabaseUrl, config.supabaseKey),
   productImages = createSupabaseProductImageStorage(config.supabaseUrl, config.supabaseKey),
+  maya = createMayaCheckoutService(config.mayaApiUrl, config.mayaPublicKey, config.storefrontOrigin),
+  orders = createSupabaseOrderRepository(config.supabaseUrl, config.supabaseSecretKey),
 }: AppDependencies = {}) {
   const app = express();
   const limiter = createAttemptLimiter();
+  const checkoutLimiter = createAttemptLimiter({ limit: 10, windowMs: 60_000 });
 
   app.disable("x-powered-by");
   app.use(cors({ origin: [config.frontendOrigin, config.storefrontOrigin], credentials: true }));
@@ -158,6 +167,31 @@ export function createApp({
       return response.json({ products: catalog });
     } catch {
       return response.status(503).json({ error: "The storefront catalog is unavailable." });
+    }
+  });
+
+  app.post("/api/storefront/checkouts", async (request, response) => {
+    const attemptKey = request.ip || "unknown";
+    if (checkoutLimiter.isLimited(attemptKey)) {
+      return response.status(429).json({ error: "Too many checkout attempts. Please try again shortly." });
+    }
+    checkoutLimiter.recordFailure(attemptKey);
+    try {
+      const checkout = await createStorefrontCheckout(request.body, products, maya, orders);
+      return response.status(201).json(checkout);
+    } catch (error) {
+      if (error instanceof StorefrontCheckoutError) return response.status(400).json({ error: error.message });
+      return response.status(503).json({ error: "Maya Checkout is temporarily unavailable." });
+    }
+  });
+
+  app.post("/api/webhooks/maya", async (request, response) => {
+    try {
+      const result = await handleMayaWebhook(request.body, maya, orders);
+      return response.json(result);
+    } catch (error) {
+      if (error instanceof MayaWebhookError) return response.status(400).json({ error: error.message });
+      return response.status(503).json({ error: "The payment notification could not be processed." });
     }
   });
 
