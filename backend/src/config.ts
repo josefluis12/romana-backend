@@ -26,18 +26,15 @@ export const config = {
   port: positiveInteger(process.env.PORT, 4322),
   isProduction: process.env.NODE_ENV === "production",
   frontendOrigin: (process.env.FRONTEND_ORIGIN || "http://localhost:5173").trim(),
+  storefrontOrigin: (process.env.STOREFRONT_ORIGIN || "http://localhost:4321").trim(),
   supabaseUrl,
   supabaseKey,
-  adminEmails: (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean),
 };
 
 if (supabaseUrl && !isValidSupabaseUrl(supabaseUrl)) {
   throw new Error("SUPABASE_URL must be a valid HTTPS project URL.");
 }
 
-if (config.isProduction && (!supabaseUrl || !supabaseKey || config.adminEmails.length === 0)) {
-  throw new Error("SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, and ADMIN_EMAILS are required in production.");
+if (config.isProduction && (!supabaseUrl || !supabaseKey)) {
+  throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required in production.");
 }

@@ -27,4 +27,5 @@ test("parses valid cookies and ignores malformed encoding", () => {
 test("compares CSRF values safely", () => {
   assert.equal(safeEqual("token", "token"), true);
   assert.equal(safeEqual("token", "different"), false);
+  assert.equal(safeEqual(undefined, undefined), false);
 });

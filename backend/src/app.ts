@@ -12,28 +12,32 @@ import {
   safeEqual,
 } from "./security.js";
 import { createSupabaseAuth, type AuthService } from "./supabase-auth.js";
+import { createSupabaseProductRepository, type ProductRepository } from "./repositories/products.js";
+import { validateProductInput } from "./schemas/product.js";
+import { createSupabaseProductImageStorage, detectImageType, type ProductImageStorage } from "./services/product-images.js";
 
 interface AppDependencies {
   auth?: AuthService;
-  adminEmails?: string[];
+  products?: ProductRepository;
+  productImages?: ProductImageStorage;
 }
 
 interface ResolvedSession {
   user: User | null;
   cookies: Record<string, string>;
+  accessToken?: string;
 }
 
 export function createApp({
   auth = createSupabaseAuth({ url: config.supabaseUrl, key: config.supabaseKey }),
-  adminEmails = config.adminEmails,
+  products = createSupabaseProductRepository(config.supabaseUrl, config.supabaseKey),
+  productImages = createSupabaseProductImageStorage(config.supabaseUrl, config.supabaseKey),
 }: AppDependencies = {}) {
   const app = express();
   const limiter = createAttemptLimiter();
-  const isAdministrator = (user: User | null): user is User =>
-    adminEmails.includes((user?.email || "").toLowerCase());
 
   app.disable("x-powered-by");
-  app.use(cors({ origin: config.frontendOrigin, credentials: true }));
+  app.use(cors({ origin: [config.frontendOrigin, config.storefrontOrigin], credentials: true }));
   app.use(express.json({ limit: "10kb" }));
   app.use((_request, response, next) => {
     response.set({
@@ -68,12 +72,12 @@ export function createApp({
   async function resolveSession(request: Request, response: Response): Promise<ResolvedSession> {
     const cookies = parseCookies(request.headers.cookie);
     const current = await auth.getUser(cookies[ACCESS_COOKIE]);
-    if (isAdministrator(current.user)) return { user: current.user, cookies };
+    if (current.user) return { user: current.user, cookies, accessToken: cookies[ACCESS_COOKIE] };
 
     const refreshed = await auth.refresh(cookies[REFRESH_COOKIE]);
-    if (!refreshed.session || !isAdministrator(refreshed.user)) return { user: null, cookies };
+    if (!refreshed.session || !refreshed.user) return { user: null, cookies };
     setSessionCookies(response, refreshed.session);
-    return { user: refreshed.user, cookies };
+    return { user: refreshed.user, cookies, accessToken: refreshed.session.access_token };
   }
 
   app.get("/api/health", (_request, response) => response.json({
@@ -107,11 +111,8 @@ export function createApp({
     }
 
     const result = await auth.signIn(email, password);
-    if (result.error || !result.session || !isAdministrator(result.user)) {
+    if (result.error || !result.session || !result.user) {
       limiter.recordFailure(attemptKey);
-      if (result.session && result.user) {
-        await auth.signOut(result.session.access_token, result.session.refresh_token);
-      }
       return response.status(401).json({ error: "That email and password combination was not recognized." });
     }
 
@@ -132,6 +133,116 @@ export function createApp({
     return response.status(204).send();
   });
 
+  app.get("/api/products", async (request, response) => {
+    const session = await resolveSession(request, response);
+    if (!session.user || !session.accessToken) return response.status(401).json({ error: "Authentication required." });
+    try {
+      return response.json({ products: await products.list(session.accessToken) });
+    } catch {
+      return response.status(503).json({ error: "The product catalog is unavailable." });
+    }
+  });
+
+  app.get("/api/storefront/products", async (_request, response) => {
+    try {
+      const catalog = (await products.listPublic()).filter((product) => product.isActive).map((product) => ({
+        slug: product.slug,
+        title: product.title,
+        category: product.category,
+        bestSeller: product.bestSeller,
+        ingredients: product.ingredients,
+        allergens: product.allergens,
+        short: product.short,
+        variants: product.variants.map(({ label, price, image }) => ({ label, price, image })),
+      }));
+      return response.json({ products: catalog });
+    } catch {
+      return response.status(503).json({ error: "The storefront catalog is unavailable." });
+    }
+  });
+
+  app.post("/api/product-images", express.raw({ type: ["image/jpeg", "image/png", "image/webp"], limit: "5mb" }), async (request, response) => {
+    const session = await resolveSession(request, response);
+    if (!session.user || !session.accessToken) return response.status(401).json({ error: "Authentication required." });
+    if (!safeEqual(request.header("x-csrf-token"), session.cookies[CSRF_COOKIE])) {
+      return response.status(403).json({ error: "Forbidden" });
+    }
+    if (!Buffer.isBuffer(request.body) || request.body.length === 0) {
+      return response.status(400).json({ error: "Choose a JPEG, PNG, or WebP image." });
+    }
+    const contentType = detectImageType(request.body);
+    if (!contentType || contentType !== request.header("content-type")?.toLowerCase()) {
+      return response.status(400).json({ error: "The uploaded file is not a valid JPEG, PNG, or WebP image." });
+    }
+    try {
+      const url = await productImages.upload(session.accessToken, session.user.id, request.body, contentType);
+      return response.status(201).json({ url });
+    } catch {
+      return response.status(503).json({ error: "The product image could not be uploaded." });
+    }
+  });
+
+  app.post("/api/products", async (request, response) => {
+    const session = await resolveSession(request, response);
+    if (!session.user || !session.accessToken) return response.status(401).json({ error: "Authentication required." });
+    if (!safeEqual(request.header("x-csrf-token"), session.cookies[CSRF_COOKIE])) {
+      return response.status(403).json({ error: "Forbidden" });
+    }
+    const validation = validateProductInput(request.body);
+    if (!validation.product) return response.status(400).json({ error: validation.error });
+    try {
+      const product = await products.create(session.accessToken, validation.product);
+      return response.status(201).json({ product });
+    } catch {
+      return response.status(503).json({ error: "The product could not be saved." });
+    }
+  });
+
+  app.put("/api/products/:productId", async (request, response) => {
+    const session = await resolveSession(request, response);
+    if (!session.user || !session.accessToken) return response.status(401).json({ error: "Authentication required." });
+    if (!safeEqual(request.header("x-csrf-token"), session.cookies[CSRF_COOKIE])) {
+      return response.status(403).json({ error: "Forbidden" });
+    }
+    const productId = request.params.productId;
+    if (!productId || !isUuid(productId)) return response.status(400).json({ error: "Invalid product identifier." });
+    const validation = validateProductInput(request.body);
+    if (!validation.product) return response.status(400).json({ error: validation.error });
+    try {
+      return response.json({ product: await products.update(session.accessToken, productId, validation.product) });
+    } catch {
+      return response.status(503).json({ error: "The product could not be updated." });
+    }
+  });
+
+  app.patch("/api/products/:productId/status", async (request, response) => {
+    const session = await resolveSession(request, response);
+    if (!session.user || !session.accessToken) return response.status(401).json({ error: "Authentication required." });
+    if (!safeEqual(request.header("x-csrf-token"), session.cookies[CSRF_COOKIE])) {
+      return response.status(403).json({ error: "Forbidden" });
+    }
+    const productId = request.params.productId;
+    if (!productId || !isUuid(productId)) return response.status(400).json({ error: "Invalid product identifier." });
+    if (typeof request.body.isActive !== "boolean") return response.status(400).json({ error: "Product status is required." });
+    try {
+      return response.json({ product: await products.setActive(session.accessToken, productId, request.body.isActive) });
+    } catch {
+      return response.status(503).json({ error: "The product status could not be updated." });
+    }
+  });
+
   app.use("/api", (_request, response) => response.status(404).json({ error: "Not found" }));
+  app.use((error: unknown, _request: Request, response: Response, next: (error?: unknown) => void) => {
+    if (isPayloadTooLarge(error)) return response.status(413).json({ error: "Product images must be 5 MB or smaller." });
+    return next(error);
+  });
   return app;
+}
+
+function isPayloadTooLarge(error: unknown): boolean {
+  return error instanceof Error && "status" in error && error.status === 413;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

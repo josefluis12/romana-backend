@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowRight, Box, Eye, EyeOff, LogOut, Package, ShoppingBag, Users } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import { DashboardPage } from "./app/(dashboard)/overview/page";
+import type { AuthenticatedUser } from "./types/auth";
 import "./app.css";
 
 interface SessionResponse {
@@ -13,11 +15,6 @@ interface LoginResponse {
   user?: { email?: string };
   csrfToken?: string;
   error?: string;
-}
-
-interface AuthenticatedUser {
-  email: string;
-  csrfToken: string;
 }
 
 function Login({ onLogin, initialError = "" }: { onLogin: (user: AuthenticatedUser) => void; initialError?: string }) {
@@ -99,63 +96,6 @@ function Login({ onLogin, initialError = "" }: { onLogin: (user: AuthenticatedUs
   );
 }
 
-function Dashboard({ user, onLogout }: { user: AuthenticatedUser; onLogout: () => void }) {
-  const [loggingOut, setLoggingOut] = useState(false);
-  const today = new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
-
-  useEffect(() => {
-    document.title = "Dashboard | Romana Admin";
-  }, []);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csrfToken: user.csrfToken }),
-      });
-    } finally {
-      onLogout();
-    }
-  }
-
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand"><span>Romana</span><small>Shop admin</small></div>
-        <nav aria-label="Main navigation">
-          <a className="active" href="#overview"><ShoppingBag /><span>Overview</span></a>
-          <a href="#orders"><Package /><span>Orders</span></a>
-          <a href="#customers"><Users /><span>Customers</span></a>
-        </nav>
-        <div className="account-block">
-          <span className="avatar">{user.email.slice(0, 1).toUpperCase()}</span>
-          <div><strong>Administrator</strong><small>{user.email}</small></div>
-        </div>
-      </aside>
-
-      <main className="dashboard" id="overview">
-        <header className="dashboard-header">
-          <div><p className="eyebrow">{today}</p><h1>Shop overview</h1></div>
-          <button className="secondary-button" type="button" onClick={handleLogout} disabled={loggingOut} title="Sign out"><LogOut /><span>{loggingOut ? "Signing out..." : "Sign out"}</span></button>
-        </header>
-        <section className="welcome-band">
-          <div><p className="eyebrow">All systems ready</p><h2>Welcome back to Romana.</h2><p>Your shop workspace is ready for orders, products, and customer management.</p></div>
-          <span className="seal">Since<br /><strong>1950</strong></span>
-        </section>
-        <section className="metrics" aria-label="Shop metrics">
-          <article><span>Orders today</span><strong>0</strong><small>Order management is next</small></article>
-          <article><span>Products</span><strong>0</strong><small>Catalog connection pending</small></article>
-          <article><span>Customers</span><strong>0</strong><small>Customer records pending</small></article>
-        </section>
-        <section className="empty-state"><Box /><h2>Your operations hub starts here</h2><p>The secure portal is in place. Orders, inventory, and shop controls can now be added one workflow at a time.</p></section>
-      </main>
-    </div>
-  );
-}
-
 function App() {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -181,7 +121,7 @@ function App() {
   }, []);
 
   if (loading) return <div className="loading-screen" role="status">Loading Romana Admin...</div>;
-  if (user) return <Dashboard user={user} onLogout={() => setUser(null)} />;
+  if (user) return <DashboardPage user={user} onLogout={() => setUser(null)} />;
   return <Login onLogin={setUser} initialError={startupError} />;
 }
 

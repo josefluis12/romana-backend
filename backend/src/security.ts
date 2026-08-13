@@ -66,6 +66,7 @@ export function parseCookies(header = ""): Record<string, string> {
 }
 
 export function safeEqual(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) return false;
   const leftBuffer = Buffer.from(left || "");
   const rightBuffer = Buffer.from(right || "");
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);

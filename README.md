@@ -35,15 +35,29 @@ Required backend variables:
 
 - `SUPABASE_URL`: the project URL
 - `SUPABASE_PUBLISHABLE_KEY`: the publishable key; a legacy anon key is also accepted
-- `ADMIN_EMAILS`: comma-separated Supabase Auth users allowed into the admin portal
 - `FRONTEND_ORIGIN`: the permitted admin frontend origin
+- `STOREFRONT_ORIGIN`: the permitted public storefront origin
 
-Create each administrator as an email/password user in Supabase Authentication and
-include their normalized email in `ADMIN_EMAILS`. Never put a secret or service-role
-key in the frontend or commit it to this repository.
+Create administrators as email/password users in Supabase Authentication. Any user
+successfully authenticated by this Supabase project can access the admin portal.
+Never put a secret or service-role key in the frontend or commit it to this repository.
 
 Supabase CLI state is scoped to `backend/supabase`. Run Supabase commands from the
 `backend` directory so future migrations remain part of the backend application.
+
+Apply the checked-in migrations before using catalog management:
+
+```bash
+cd backend
+npx supabase db push
+```
+
+Products are stored separately from their size variants. Each required variant owns
+its size label, numeric PHP price, and image, while shared catalog details such as the
+title, category, description, ingredients, allergens, and bestseller state remain on
+the product. Variant images are uploaded to the public `product-images` Supabase
+Storage bucket through the authenticated backend. JPEG, PNG, and WebP files up to
+5 MB are accepted.
 
 ## Development
 
