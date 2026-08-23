@@ -8,7 +8,11 @@ import {
   Users,
 } from "lucide-react";
 import { ProductCatalog } from "../../../components/ProductCatalog";
+import { OrderTracker } from "../../../components/OrderTracker";
+import { CustomerAnalytics } from "../../../components/CustomerAnalytics";
 import type { AuthenticatedUser } from "../../../types/auth";
+
+type DashboardTab = "overview" | "orders" | "products" | "customers";
 
 interface DashboardPageProps {
   user: AuthenticatedUser;
@@ -17,9 +21,7 @@ interface DashboardPageProps {
 
 export function DashboardPage({ user, onLogout }: DashboardPageProps) {
   const [loggingOut, setLoggingOut] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "products">(
-    window.location.hash === "#products" ? "products" : "overview",
-  );
+  const [activeTab, setActiveTab] = useState<DashboardTab>(readTab);
   const today = new Intl.DateTimeFormat("en-PH", {
     weekday: "long",
     month: "long",
@@ -28,9 +30,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
 
   useEffect(() => {
     function syncTabWithHash() {
-      setActiveTab(
-        window.location.hash === "#products" ? "products" : "overview",
-      );
+      setActiveTab(readTab());
     }
 
     window.addEventListener("hashchange", syncTabWithHash);
@@ -38,7 +38,8 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
   }, []);
 
   useEffect(() => {
-    document.title = `${activeTab === "products" ? "Products" : "Dashboard"} | Romana Admin`;
+    const title = activeTab === "products" ? "Products" : activeTab === "orders" ? "Orders" : activeTab === "customers" ? "Customers" : "Dashboard";
+    document.title = `${title} | Romana Admin`;
   }, [activeTab]);
 
   async function handleLogout() {
@@ -59,7 +60,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <span>Romana</span>
+          <img className="sidebar-logo" src="/logo.png" alt="Romana" />
           <small>Shop admin</small>
         </div>
         <nav aria-label="Main navigation">
@@ -71,7 +72,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
             <ShoppingBag />
             <span>Overview</span>
           </a>
-          <a href="#orders">
+          <a className={activeTab === "orders" ? "active" : undefined} href="#orders" aria-current={activeTab === "orders" ? "page" : undefined}>
             <Package />
             <span>Orders</span>
           </a>
@@ -83,7 +84,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
             <Tags />
             <span>Products</span>
           </a>
-          <a href="#customers">
+          <a className={activeTab === "customers" ? "active" : undefined} href="#customers" aria-current={activeTab === "customers" ? "page" : undefined}>
             <Users />
             <span>Customers</span>
           </a>
@@ -101,9 +102,9 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
         <header className="dashboard-header">
           <div>
             <p className="eyebrow">
-              {activeTab === "products" ? "Catalog" : today}
+              {activeTab === "products" ? "Catalog" : activeTab === "orders" ? "Fulfilment" : activeTab === "customers" ? "Audience insights" : today}
             </p>
-            <h1>{activeTab === "products" ? "Products" : "Shop overview"}</h1>
+            <h1>{activeTab === "products" ? "Products" : activeTab === "orders" ? "Order tracker" : activeTab === "customers" ? "Customers" : "Shop overview"}</h1>
           </div>
           <button
             className="secondary-button"
@@ -118,6 +119,10 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
         </header>
         {activeTab === "products" ? (
           <ProductCatalog csrfToken={user.csrfToken} />
+        ) : activeTab === "orders" ? (
+          <OrderTracker csrfToken={user.csrfToken} />
+        ) : activeTab === "customers" ? (
+          <CustomerAnalytics />
         ) : (
           <>
             <section className="welcome-band">
@@ -160,4 +165,11 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
       </main>
     </div>
   );
+}
+
+function readTab(): DashboardTab {
+  if (window.location.hash.startsWith("#orders")) return "orders";
+  if (window.location.hash === "#products") return "products";
+  if (window.location.hash.startsWith("#customers")) return "customers";
+  return "overview";
 }

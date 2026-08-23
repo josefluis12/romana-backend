@@ -17,8 +17,9 @@ import { createSupabaseOrderRepository, type OrderRepository } from "./repositor
 import { validateProductInput } from "./schemas/product.js";
 import { createSupabaseProductImageStorage, detectImageType, type ProductImageStorage } from "./services/product-images.js";
 import { createMayaCheckoutService, type MayaCheckoutService } from "./services/maya-checkout.js";
-import { createStorefrontCheckout, StorefrontCheckoutError } from "./services/storefront-checkout.js";
+import { completeStorefrontCheckout, createStorefrontCheckout, StorefrontCheckoutError } from "./services/storefront-checkout.js";
 import { handleMayaWebhook, MayaWebhookError } from "./services/maya-webhook.js";
+import { registerOrderRoutes } from "./routes/orders.js";
 
 interface AppDependencies {
   auth?: AuthService;
@@ -170,6 +171,8 @@ export function createApp({
     }
   });
 
+  registerOrderRoutes(app, orders, maya, resolveSession);
+
   app.post("/api/storefront/checkouts", async (request, response) => {
     const attemptKey = request.ip || "unknown";
     if (checkoutLimiter.isLimited(attemptKey)) {
@@ -182,6 +185,16 @@ export function createApp({
     } catch (error) {
       if (error instanceof StorefrontCheckoutError) return response.status(400).json({ error: error.message });
       return response.status(503).json({ error: "Maya Checkout is temporarily unavailable." });
+    }
+  });
+
+  app.post("/api/storefront/checkouts/:checkoutId/complete", async (request, response) => {
+    try {
+      const result = await completeStorefrontCheckout(request.params.checkoutId || "", maya, orders);
+      return response.json(result);
+    } catch (error) {
+      if (error instanceof StorefrontCheckoutError) return response.status(400).json({ error: error.message });
+      return response.status(503).json({ error: "Payment confirmation is temporarily unavailable." });
     }
   });
 

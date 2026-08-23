@@ -47,6 +47,10 @@ creating an order. Webhook retries are idempotent, and customer email addresses 
 normalized so each unique email maps to one customer record. Never expose the
 Supabase secret key to either frontend.
 
+Verified payments appear under **Orders** in the admin portal. Administrators can
+review the customer, delivery address, line items, paid total, and advance fulfilment
+through paid, processing, shipped, and completed states.
+
 Create administrators as email/password users in Supabase Authentication. Any user
 successfully authenticated by this Supabase project can access the admin portal.
 Never put a secret or service-role key in the frontend or commit it to this repository.

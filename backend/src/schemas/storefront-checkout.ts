@@ -19,14 +19,23 @@ function readCustomer(record: Record<string, unknown>): CheckoutCustomer {
   const customer = readRecord(record.customer, "Customer information is required.");
   const email = readText(customer, "email", "Email address", 254).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new StorefrontCheckoutError("Enter a valid email address.");
-  const phone = readText(customer, "phone", "Mobile number", 30);
-  if (!/^\+?[0-9 ()-]{7,30}$/.test(phone)) throw new StorefrontCheckoutError("Enter a valid mobile number.");
+  const phone = normalizePhoneNumber(readText(customer, "phone", "Mobile number", 30));
   return {
     email,
     firstName: readText(customer, "firstName", "First name", 100),
     lastName: readText(customer, "lastName", "Last name", 100),
     phone,
   };
+}
+
+function normalizePhoneNumber(value: string): string {
+  if (!/^\+?[0-9 ()-]{7,30}$/.test(value)) throw new StorefrontCheckoutError("Enter a valid mobile number.");
+  const digits = value.replace(/\D/g, "");
+  if (/^09\d{9}$/.test(digits)) return `+63${digits.slice(1)}`;
+  if (/^9\d{9}$/.test(digits)) return `+63${digits}`;
+  if (/^639\d{9}$/.test(digits)) return `+${digits}`;
+  if (digits.length < 7 || digits.length > 15) throw new StorefrontCheckoutError("Enter a valid mobile number.");
+  return `+${digits}`;
 }
 
 function readAddress(record: Record<string, unknown>): ShippingAddress {

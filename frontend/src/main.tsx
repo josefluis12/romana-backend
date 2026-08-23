@@ -4,6 +4,8 @@ import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { DashboardPage } from "./app/(dashboard)/overview/page";
 import type { AuthenticatedUser } from "./types/auth";
 import "./app.css";
+import "./styles/orders.css";
+import "./styles/customers.css";
 
 interface SessionResponse {
   authenticated: boolean;

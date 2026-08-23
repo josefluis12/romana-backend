@@ -60,6 +60,11 @@ const orders: OrderRepository = {
     completedPaymentId = paymentId;
     return { orderId: "22222222-2222-4222-8222-222222222222", created: true };
   },
+  list: async () => [],
+  listByCustomer: async () => [],
+  listPendingPaymentIds: async () => [],
+  startPreparing: async () => false,
+  ship: async () => false,
 };
 
 const checkoutDetails = {
@@ -101,6 +106,7 @@ test("creates a Maya checkout using catalog prices", async () => {
     assert.equal(received[0]?.unitPrice, 320);
     assert.equal(received[0]?.quantity, 2);
     assert.equal(pendingCheckout?.customer.email, "shopper@example.com");
+    assert.equal(pendingCheckout?.customer.phone, "+639123456789");
     assert.equal(pendingCheckout?.total, 640);
     assert.equal(attachedCheckout?.checkoutId, "checkout-id");
   });
@@ -143,6 +149,36 @@ test("creates an order once Maya verifies a successful payment", async () => {
     assert.equal(response.status, 200);
     assert.equal(completedPaymentId, paymentId);
     assert.deepEqual(await response.json(), { accepted: true, orderId: "22222222-2222-4222-8222-222222222222" });
+  });
+});
+
+test("completes an order from the storefront return when a webhook is unavailable", async () => {
+  completedPaymentId = null;
+  const paymentId = "55555555-5555-4555-8555-555555555555";
+  const maya: MayaCheckoutService = {
+    isConfigured: true,
+    create: async () => ({ checkoutId: paymentId, redirectUrl: "https://payments-web-sandbox.maya.ph/payment" }),
+    getPaymentStatus: async () => "PAYMENT_SUCCESS",
+  };
+  await withServer(maya, async (origin) => {
+    const response = await fetch(`${origin}/api/storefront/checkouts/${paymentId}/complete`, { method: "POST" });
+    assert.equal(response.status, 200);
+    assert.equal(completedPaymentId, paymentId);
+    assert.deepEqual(await response.json(), { orderId: "22222222-2222-4222-8222-222222222222", created: true });
+  });
+});
+
+test("does not complete an unpaid storefront checkout", async () => {
+  completedPaymentId = null;
+  const maya: MayaCheckoutService = {
+    isConfigured: true,
+    create: async () => ({ checkoutId: "unused", redirectUrl: "https://payments-web-sandbox.maya.ph/payment" }),
+    getPaymentStatus: async () => "PAYMENT_FAILED",
+  };
+  await withServer(maya, async (origin) => {
+    const response = await fetch(`${origin}/api/storefront/checkouts/66666666-6666-4666-8666-666666666666/complete`, { method: "POST" });
+    assert.equal(response.status, 400);
+    assert.equal(completedPaymentId, null);
   });
 });
 

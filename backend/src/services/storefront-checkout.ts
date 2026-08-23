@@ -66,3 +66,20 @@ export async function createStorefrontCheckout(
   await orders.attachMayaCheckout(requestReferenceNumber, checkout.checkoutId);
   return checkout;
 }
+
+export async function completeStorefrontCheckout(
+  checkoutId: string,
+  maya: MayaCheckoutService,
+  orders: OrderRepository,
+) {
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(checkoutId)) {
+    throw new StorefrontCheckoutError("Invalid checkout identifier.");
+  }
+  const paymentStatus = await maya.getPaymentStatus(checkoutId);
+  if (paymentStatus !== "PAYMENT_SUCCESS") {
+    throw new StorefrontCheckoutError("Payment has not been confirmed.");
+  }
+  const completed = await orders.completePaidCheckout(checkoutId);
+  if (!completed) throw new StorefrontCheckoutError("Checkout session was not found.");
+  return { orderId: completed.orderId, created: completed.created };
+}
