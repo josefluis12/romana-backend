@@ -102,6 +102,11 @@ src/
 - Do not create a generic `pages/` directory alongside `app/`; route entries belong in
   the `app/` tree.
 - Use function components and hooks.
+- Use Tailwind CSS utility classes for all new or modified frontend styling.
+- Do not add selectors or declarations to handwritten CSS files. Treat the existing
+  CSS as legacy and migrate styles in any UI area being substantially modified.
+- Keep the Tailwind entrypoint limited to importing Tailwind. Prefer theme utilities
+  and responsive variants over arbitrary values when an equivalent utility exists.
 - Do not implement multiple full pages in one entry-point file.
 - Keep `main.tsx` limited to creating the React root, rendering `App`, and importing
   global styles.

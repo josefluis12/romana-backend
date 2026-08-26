@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ChartNoAxesCombined,
   Box,
   LogOut,
   Package,
@@ -10,9 +11,10 @@ import {
 import { ProductCatalog } from "../../../components/ProductCatalog";
 import { OrderTracker } from "../../../components/OrderTracker";
 import { CustomerAnalytics } from "../../../components/CustomerAnalytics";
+import { StatisticsPage } from "../statistics/page";
 import type { AuthenticatedUser } from "../../../types/auth";
 
-type DashboardTab = "overview" | "orders" | "products" | "customers";
+type DashboardTab = "overview" | "orders" | "products" | "customers" | "statistics";
 
 interface DashboardPageProps {
   user: AuthenticatedUser;
@@ -38,8 +40,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
   }, []);
 
   useEffect(() => {
-    const title = activeTab === "products" ? "Products" : activeTab === "orders" ? "Orders" : activeTab === "customers" ? "Customers" : "Dashboard";
-    document.title = `${title} | Romana Admin`;
+    document.title = `${tabHeading(activeTab)} | Romana Admin`;
   }, [activeTab]);
 
   async function handleLogout() {
@@ -58,7 +59,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className="sidebar min-w-0">
         <div className="sidebar-brand">
           <img className="sidebar-logo" src="/logo.png" alt="Romana" />
           <small>Shop admin</small>
@@ -88,6 +89,10 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
             <Users />
             <span>Customers</span>
           </a>
+          <a className={activeTab === "statistics" ? "active" : undefined} href="#statistics" aria-current={activeTab === "statistics" ? "page" : undefined}>
+            <ChartNoAxesCombined />
+            <span>Statistics</span>
+          </a>
         </nav>
         <div className="account-block">
           <span className="avatar">{user.email.slice(0, 1).toUpperCase()}</span>
@@ -98,13 +103,13 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
         </div>
       </aside>
 
-      <main className="dashboard" id={activeTab}>
+      <main className="dashboard min-w-0" id={activeTab}>
         <header className="dashboard-header">
           <div>
             <p className="eyebrow">
-              {activeTab === "products" ? "Catalog" : activeTab === "orders" ? "Fulfilment" : activeTab === "customers" ? "Audience insights" : today}
+              {activeTab === "overview" ? today : tabEyebrow(activeTab)}
             </p>
-            <h1>{activeTab === "products" ? "Products" : activeTab === "orders" ? "Order tracker" : activeTab === "customers" ? "Customers" : "Shop overview"}</h1>
+            <h1>{tabHeading(activeTab)}</h1>
           </div>
           <button
             className="secondary-button"
@@ -123,6 +128,8 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
           <OrderTracker csrfToken={user.csrfToken} />
         ) : activeTab === "customers" ? (
           <CustomerAnalytics />
+        ) : activeTab === "statistics" ? (
+          <StatisticsPage />
         ) : (
           <>
             <section className="welcome-band">
@@ -171,5 +178,21 @@ function readTab(): DashboardTab {
   if (window.location.hash.startsWith("#orders")) return "orders";
   if (window.location.hash === "#products") return "products";
   if (window.location.hash.startsWith("#customers")) return "customers";
+  if (window.location.hash === "#statistics") return "statistics";
   return "overview";
+}
+
+function tabHeading(tab: DashboardTab): string {
+  if (tab === "products") return "Products";
+  if (tab === "orders") return "Order tracker";
+  if (tab === "customers") return "Customers";
+  if (tab === "statistics") return "Statistics";
+  return "Shop overview";
+}
+
+function tabEyebrow(tab: DashboardTab): string {
+  if (tab === "products") return "Catalog";
+  if (tab === "orders") return "Fulfilment";
+  if (tab === "customers") return "Audience insights";
+  return "Performance insights";
 }

@@ -1,10 +1,7 @@
 .orders-section { margin-top: 38px; }
 .orders-toolbar { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 18px; }
 .orders-toolbar p { margin: 0; color: var(--muted); font-size: 14px; }
-.orders-list { display: grid; gap: 18px; margin-top: 22px; }
-.order-summary { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(160px, 1fr) minmax(100px, .6fr) auto auto; gap: 20px; align-items: center; border: 1px solid var(--line); padding: 18px 20px; background: white; }
-.order-summary > div { display: grid; gap: 5px; }
-.order-summary time, .order-summary small { color: var(--muted); font-size: 12px; }
+.orders-section time, .orders-section small { color: var(--muted); font-size: 12px; }
 .order-reference { font-weight: 800; }
 .order-status { display: inline-flex; width: max-content; border-radius: 999px; padding: 6px 10px; color: #544f44; background: #ece9e1; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .order-status-processing, .order-status-shipped { color: #785000; background: #fff0c7; }
@@ -109,9 +106,6 @@
 
 @media (max-width: 800px) {
   .orders-section, .order-detail { margin-top: 26px; }
-  .order-summary { grid-template-columns: 1fr auto; }
-  .order-summary > div:nth-child(2), .order-summary > strong { grid-column: 1; }
-  .order-summary .order-status, .order-summary .order-view-link { grid-column: 2; }
   .order-detail-heading, .order-progress-heading { align-items: flex-start; flex-direction: column; }
   .order-detail-actions { width: 100%; align-items: flex-start; flex-direction: column; }
   .order-action-button { width: 100%; }

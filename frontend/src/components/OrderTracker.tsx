@@ -109,7 +109,7 @@ export function OrderTracker({ csrfToken }: { csrfToken: string }) {
           <p>Verified Maya payments will appear here automatically.</p>
         </div>
       ) : (
-        <div className="orders-list">
+        <div className="mt-6 grid gap-5">
           {orders.map((order) => <OrderSummary key={order.id} order={order} />)}
         </div>
       )}
@@ -120,18 +120,18 @@ export function OrderTracker({ csrfToken }: { csrfToken: string }) {
 function OrderSummary({ order }: { order: Order }) {
   const itemCount = order.items.reduce((total, item) => total + item.quantity, 0);
   return (
-    <article className="order-summary">
-      <div>
+    <article className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-3 border border-[var(--line)] bg-white p-5 min-[801px]:grid-cols-[minmax(180px,1.2fr)_minmax(160px,1fr)_minmax(100px,.6fr)_120px_100px]">
+      <div className="grid justify-self-start gap-1 text-left">
         <span className="order-reference">#{shortReference(order)}</span>
         <time>{date.format(new Date(order.paidAt))}</time>
       </div>
-      <div>
+      <div className="col-start-1 row-start-2 grid justify-self-start gap-1 text-left min-[801px]:col-auto min-[801px]:row-auto">
         <strong>{order.customer.firstName} {order.customer.lastName}</strong>
         <small>{itemCount} item{itemCount === 1 ? "" : "s"}</small>
       </div>
-      <strong>{peso.format(order.total)}</strong>
-      <span className={`order-status order-status-${order.status}`}>{statusLabel(order.status)}</span>
-      <a className="order-view-link" href={`#orders/${order.id}`}>
+      <strong className="col-start-1 row-start-3 justify-self-start text-left min-[801px]:col-auto min-[801px]:row-auto">{peso.format(order.total)}</strong>
+      <span className={`order-status order-status-${order.status} col-start-2 row-start-1 justify-self-start text-left min-[801px]:col-auto min-[801px]:row-auto`}>{statusLabel(order.status)}</span>
+      <a className="order-view-link col-start-2 row-start-2 justify-self-start text-left min-[801px]:col-auto min-[801px]:row-auto" href={`#orders/${order.id}`}>
         View order
         <ChevronRight />
       </a>

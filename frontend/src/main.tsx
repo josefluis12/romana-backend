@@ -6,6 +6,7 @@ import type { AuthenticatedUser } from "./types/auth";
 import "./app.css";
 import "./styles/orders.css";
 import "./styles/customers.css";
+import "./styles/tailwind.css";
 
 interface SessionResponse {
   authenticated: boolean;
