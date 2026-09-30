@@ -1,7 +1,8 @@
-# Romana Shop Admin
+# Romana Operations Admin
 
-The private administration system for the Romana online shop. It consists of two
-independent TypeScript applications.
+The private administration system and API foundation for Romana's sales channels
+and future ERP workflows. The online shop is one sales channel. The workspace
+consists of two independent TypeScript applications.
 
 ## Architecture
 
@@ -51,8 +52,55 @@ Verified payments appear under **Orders** in the admin portal. Administrators ca
 review the customer, delivery address, line items, paid total, and advance fulfilment
 through paid, processing, shipped, and completed states.
 
-Create administrators as email/password users in Supabase Authentication. Any user
-successfully authenticated by this Supabase project can access the admin portal.
+## Baguio Sales
+
+The **Baguio Sales** workspace models the factory-to-van delivery process separately
+from online checkout. A dispatch must be created for a van before customer orders can
+be added to it. One dispatch can contain multiple orders, and creating each order also
+creates a numbered Delivery Order Form and a pending Delivery Receipt. The workflow is:
+
+```text
+Order created → Pending approval → Approved → Loaded → In transit → Delivered → Successful
+```
+
+Loading records the product transfer from the factory to the dispatch's van inventory
+location. A dispatch can start only after all its orders are loaded; starting it moves
+every attached order to **In transit** atomically. The Delivery Receipt stays pending
+until the delivered order is confirmed successful. The DOF, DR, and per-order summary are printable. Prepared-by names are
+printed, while approval and client acknowledgment use manual signatures on paper.
+
+Order product lines, quantities, prices, and delivery notes can be revised until the
+order is delivered, including while its dispatch is in transit. For loaded orders,
+the same transaction updates the factory-to-van transfer allocation and records a
+before/after revision for audit purposes.
+
+Each dispatch has a shareable detail URL with its own Preparing → In transit →
+Completed tracker. Starting a dispatch freezes a pre-dispatch allocation snapshot.
+The report presents products as rows and customer orders as columns, then compares
+that snapshot with the current or post-delivery allocation. Orders revised after
+creation and customers added during transit are tagged for reconciliation.
+
+Every new dispatch requires one driver account. Administrators create restricted
+driver accounts in the Baguio sales workspace and assign a driver while preparing
+the dispatch. Driver accounts carry the protected `dispatch_driver` role in Supabase
+Auth app metadata, cannot use admin APIs, and can retrieve only their own assignments
+from `GET /api/driver/dispatches` with a bearer access token. This endpoint is the
+security boundary intended for the future React Native driver application, which
+should authenticate through the Supabase mobile SDK and send its access token to the
+backend as `Authorization: Bearer <token>`.
+
+Customers are registered in the shared **Customers** workspace and associated with
+one or more sales channels. The Baguio customer tab supplies the directory used by
+Baguio orders; online checkout customers live in the same master table. Orders
+reference the shared customer record and retain a name, address, and phone snapshot
+so previously issued documents remain accurate after future directory changes.
+
+The initial migration creates `Baguio Van 1`; add each real van as a separate active
+`inventory_locations` record with type `vehicle` before operational use.
+
+Create administrators as email/password users in Supabase Authentication. Accounts
+without the restricted `dispatch_driver` app-metadata role can access the admin
+portal; driver accounts must use the driver application API.
 Never put a secret or service-role key in the frontend or commit it to this repository.
 
 Supabase CLI state is scoped to `backend/supabase`. Run Supabase commands from the
@@ -100,3 +148,50 @@ From the repository root:
 npm run check
 npm run build
 ```
+
+## AWS deployment
+
+### Backend: Elastic Beanstalk
+
+Build a source bundle whose root contains the backend `package.json` and compiled
+`dist` directory:
+
+```bash
+cd backend
+npm ci
+npm run check
+npm run build
+zip -r romana-backend.zip package.json package-lock.json dist .platform
+```
+
+In Elastic Beanstalk, create a **Web server environment** using the current Node.js
+on Amazon Linux 2023 platform and upload `backend/romana-backend.zip`. Set the health
+check path to `/api/health` and configure the environment properties listed under
+Supabase above. Set `NODE_ENV=production`; Elastic Beanstalk supplies `PORT`.
+
+### Frontend: Amplify Hosting
+
+Connect this GitHub repository and select the frontend as a monorepo application:
+
+```text
+App root: frontend
+Environment variable: AMPLIFY_MONOREPO_APP_ROOT=frontend
+```
+
+Amplify will use the root `amplify.yml` to install and build the Vite app. After the
+Beanstalk environment has HTTPS enabled, add this rule first under **Rewrites and
+redirects**, replacing the target hostname:
+
+```json
+{
+  "source": "/api/<*>",
+  "target": "https://your-environment.example.com/api/<*>",
+  "status": "200",
+  "condition": null
+}
+```
+
+This reverse proxy preserves the frontend's relative `/api` contract and same-site
+authentication cookies. Set `FRONTEND_ORIGIN` in Beanstalk to the exact Amplify HTTPS
+origin, and set `STOREFRONT_ORIGIN` to the public shop's exact origin. Point Maya's
+webhook directly to `https://your-backend.example/api/webhooks/maya`.

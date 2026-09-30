@@ -75,7 +75,7 @@ export async function uploadProductImage(image: File, csrfToken: string): Promis
   return result.url;
 }
 
-async function fetchWithCsrf(path: string, init: RequestInit, suppliedToken: string): Promise<Response> {
+export async function fetchWithCsrf(path: string, init: RequestInit, suppliedToken: string): Promise<Response> {
   if (tokenSource !== suppliedToken) {
     tokenSource = suppliedToken;
     currentCsrfToken = suppliedToken;

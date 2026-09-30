@@ -5,6 +5,7 @@ backend/.env
 frontend/.env
 backend/dist/
 frontend/dist/
+backend/romana-backend.zip
 *.tsbuildinfo
 .DS_Store
 npm-debug.log*

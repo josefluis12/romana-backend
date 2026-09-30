@@ -1,6 +1,5 @@
 import cors from "cors";
 import express, { type CookieOptions, type Request, type Response } from "express";
-import type { Session, User } from "@supabase/supabase-js";
 import { config } from "./config.js";
 import {
   ACCESS_COOKIE,
@@ -20,19 +19,20 @@ import { createMayaCheckoutService, type MayaCheckoutService } from "./services/
 import { completeStorefrontCheckout, createStorefrontCheckout, StorefrontCheckoutError } from "./services/storefront-checkout.js";
 import { handleMayaWebhook, MayaWebhookError } from "./services/maya-webhook.js";
 import { registerOrderRoutes } from "./routes/orders.js";
-
+import { createSupabaseChannelSalesRepository, type ChannelSalesRepository } from "./repositories/channel-sales.js";
+import { registerChannelSalesRoutes } from "./routes/channel-sales.js";
+import { getAuthenticatedUserName } from "./authenticated-user.js";
+import { registerDispatchDriverRoutes } from "./routes/dispatch-drivers.js";
+import { createSupabaseDispatchDriverService, isDispatchDriver, type DispatchDriverService } from "./services/dispatch-drivers.js";
+import { createSessionManager, type ResolvedSession } from "./session-manager.js";
 interface AppDependencies {
   auth?: AuthService;
   products?: ProductRepository;
   productImages?: ProductImageStorage;
   maya?: MayaCheckoutService;
   orders?: OrderRepository;
-}
-
-interface ResolvedSession {
-  user: User | null;
-  cookies: Record<string, string>;
-  accessToken?: string;
+  channelSales?: ChannelSalesRepository;
+  dispatchDrivers?: DispatchDriverService;
 }
 
 export function createApp({
@@ -41,6 +41,8 @@ export function createApp({
   productImages = createSupabaseProductImageStorage(config.supabaseUrl, config.supabaseKey),
   maya = createMayaCheckoutService(config.mayaApiUrl, config.mayaPublicKey, config.storefrontOrigin),
   orders = createSupabaseOrderRepository(config.supabaseUrl, config.supabaseSecretKey),
+  channelSales = createSupabaseChannelSalesRepository(config.supabaseUrl, config.supabaseSecretKey),
+  dispatchDrivers = createSupabaseDispatchDriverService(config.supabaseUrl, config.supabaseSecretKey),
 }: AppDependencies = {}) {
   const app = express();
   const limiter = createAttemptLimiter();
@@ -66,28 +68,14 @@ export function createApp({
     path: "/api",
   };
 
-  function setSessionCookies(response: Response, session: Session): void {
-    const expiresAt = session.expires_at ?? Math.floor(Date.now() / 1000) + session.expires_in;
-    const ttlMs = Math.max(0, expiresAt * 1000 - Date.now());
-    response.cookie(ACCESS_COOKIE, session.access_token, { ...cookieOptions, maxAge: ttlMs });
-    response.cookie(REFRESH_COOKIE, session.refresh_token, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
-  }
-
-  function clearSessionCookies(response: Response): void {
-    response.clearCookie(ACCESS_COOKIE, cookieOptions);
-    response.clearCookie(REFRESH_COOKIE, cookieOptions);
-    response.clearCookie(CSRF_COOKIE, cookieOptions);
-  }
-
-  async function resolveSession(request: Request, response: Response): Promise<ResolvedSession> {
-    const cookies = parseCookies(request.headers.cookie);
-    const current = await auth.getUser(cookies[ACCESS_COOKIE]);
-    if (current.user) return { user: current.user, cookies, accessToken: cookies[ACCESS_COOKIE] };
-
-    const refreshed = await auth.refresh(cookies[REFRESH_COOKIE]);
-    if (!refreshed.session || !refreshed.user) return { user: null, cookies };
-    setSessionCookies(response, refreshed.session);
-    return { user: refreshed.user, cookies, accessToken: refreshed.session.access_token };
+  const sessionManager = createSessionManager(auth, cookieOptions);
+  const resolvedSessions = new WeakMap<Request, Promise<ResolvedSession>>();
+  function resolveSession(request: Request, response: Response): Promise<ResolvedSession> {
+    const existing = resolvedSessions.get(request);
+    if (existing) return existing;
+    const session = sessionManager.resolve(request, response);
+    resolvedSessions.set(request, session);
+    return session;
   }
 
   app.get("/api/health", (_request, response) => response.json({
@@ -98,14 +86,14 @@ export function createApp({
   app.get("/api/auth/session", async (request, response) => {
     const { user, cookies } = await resolveSession(request, response);
     if (!user) {
-      clearSessionCookies(response);
+      sessionManager.clear(response);
       return response.status(401).json({ authenticated: false });
     }
     const csrfToken = cookies[CSRF_COOKIE] || createCsrfToken();
     if (!cookies[CSRF_COOKIE]) {
       response.cookie(CSRF_COOKIE, csrfToken, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
     }
-    return response.json({ authenticated: true, user: { email: user.email }, csrfToken });
+    return response.json({ authenticated: true, user: { email: user.email, name: getAuthenticatedUserName(user) }, csrfToken });
   });
 
   app.post("/api/auth/login", async (request, response) => {
@@ -125,12 +113,16 @@ export function createApp({
       limiter.recordFailure(attemptKey);
       return response.status(401).json({ error: "That email and password combination was not recognized." });
     }
+    if (isDispatchDriver(result.user)) {
+      await auth.signOut(result.session.access_token, result.session.refresh_token);
+      return response.status(403).json({ error: "Use the driver app to sign in." });
+    }
 
     limiter.clear(attemptKey);
     const csrfToken = createCsrfToken();
-    setSessionCookies(response, result.session);
+    sessionManager.set(response, result.session);
     response.cookie(CSRF_COOKIE, csrfToken, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
-    return response.json({ user: { email: result.user.email }, csrfToken });
+    return response.json({ user: { email: result.user.email, name: getAuthenticatedUserName(result.user) }, csrfToken });
   });
 
   app.post("/api/auth/logout", async (request, response) => {
@@ -139,8 +131,15 @@ export function createApp({
       return response.status(403).json({ error: "Forbidden" });
     }
     await auth.signOut(cookies[ACCESS_COOKIE], cookies[REFRESH_COOKIE]);
-    clearSessionCookies(response);
+    sessionManager.clear(response);
     return response.status(204).send();
+  });
+
+  app.use("/api", async (request, response, next) => {
+    if (request.path.startsWith("/driver/") || request.path.startsWith("/storefront/") || request.path.startsWith("/webhooks/")) return next();
+    const session = await resolveSession(request, response);
+    if (session.user && isDispatchDriver(session.user)) return response.status(403).json({ error: "Administrator access required." });
+    return next();
   });
 
   app.get("/api/products", async (request, response) => {
@@ -172,6 +171,8 @@ export function createApp({
   });
 
   registerOrderRoutes(app, orders, maya, resolveSession);
+  registerChannelSalesRoutes(app, channelSales, resolveSession);
+  registerDispatchDriverRoutes(app, dispatchDrivers, channelSales, resolveSession);
 
   app.post("/api/storefront/checkouts", async (request, response) => {
     const attemptKey = request.ip || "unknown";

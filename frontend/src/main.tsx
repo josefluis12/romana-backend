@@ -10,12 +10,12 @@ import "./styles/tailwind.css";
 
 interface SessionResponse {
   authenticated: boolean;
-  user?: { email?: string };
+  user?: { email?: string; name?: string };
   csrfToken?: string;
 }
 
 interface LoginResponse {
-  user?: { email?: string };
+  user?: { email?: string; name?: string };
   csrfToken?: string;
   error?: string;
 }
@@ -50,6 +50,7 @@ function Login({ onLogin, initialError = "" }: { onLogin: (user: AuthenticatedUs
       }
       onLogin({
         email: result.user?.email || "Administrator",
+        name: result.user?.name || result.user?.email || "Administrator",
         csrfToken: result.csrfToken || "",
       });
     } catch {
@@ -111,7 +112,7 @@ function App() {
         if (response.ok) {
           const session = (await response.json()) as SessionResponse;
           if (session.authenticated) {
-            setUser({ email: session.user?.email || "Administrator", csrfToken: session.csrfToken || "" });
+            setUser({ email: session.user?.email || "Administrator", name: session.user?.name || session.user?.email || "Administrator", csrfToken: session.csrfToken || "" });
           }
         }
       } catch {

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, Map, RefreshCw, Search, UsersRound } from "lucide-react";
 import { listCustomerOrders, listOrders } from "../services/orders";
+import { listBaguioClients, listCustomers, listOnlineCustomers } from "../services/channel-sales";
 import type { Order } from "../types/order";
-import { summarizeCustomers, summarizeRegions } from "./customer-analytics";
+import type { BaguioClient } from "../types/channel-sale";
+import { mergeCustomerDirectory, summarizeCustomerChannels, summarizeCustomers, summarizeRegions } from "./customer-analytics";
 import { CustomerDetails } from "./CustomerDetails";
 import { PhilippinesRegionMap } from "./PhilippinesRegionMap";
 
@@ -11,6 +13,9 @@ const date = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" });
 
 export function CustomerAnalytics() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [directory, setDirectory] = useState<BaguioClient[]>([]);
+  const [onlineCustomers, setOnlineCustomers] = useState<BaguioClient[]>([]);
+  const [baguioCustomers, setBaguioCustomers] = useState<BaguioClient[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -22,7 +27,16 @@ export function CustomerAnalytics() {
     setLoading(true);
     setError("");
     try {
-      setOrders(await listOrders());
+      const [nextOrders, nextDirectory, nextOnline, nextBaguio] = await Promise.all([
+        listOrders(),
+        listCustomers(),
+        listOnlineCustomers(),
+        listBaguioClients(),
+      ]);
+      setOrders(nextOrders);
+      setDirectory(nextDirectory);
+      setOnlineCustomers(nextOnline);
+      setBaguioCustomers(nextBaguio);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load customer analytics.");
     } finally {
@@ -55,13 +69,15 @@ export function CustomerAnalytics() {
     return () => window.removeEventListener("hashchange", syncSelectedCustomer);
   }, []);
 
-  const customers = useMemo(() => summarizeCustomers(orders), [orders]);
+  const customers = useMemo(() => mergeCustomerDirectory(directory, orders), [directory, orders]);
   const regions = useMemo(() => summarizeRegions(orders), [orders]);
+  const channelSummary = useMemo(
+    () => summarizeCustomerChannels(directory, onlineCustomers, baguioCustomers),
+    [directory, onlineCustomers, baguioCustomers],
+  );
   const visibleCustomers = customers.filter((customer) =>
     `${customer.name} ${customer.email} ${customer.phone} ${customer.location}`.toLowerCase().includes(query.trim().toLowerCase()),
   );
-  const returningCustomers = customers.filter((customer) => customer.orderCount > 1).length;
-  const averageOrder = orders.length ? orders.reduce((sum, order) => sum + order.total, 0) / orders.length : 0;
 
   if (loading) return <div className="catalog-status" role="status">Loading customer insights…</div>;
 
@@ -81,18 +97,19 @@ export function CustomerAnalytics() {
   return (
     <section className="customer-analytics">
       <div className="customer-toolbar">
-        <p>Customer records are generated from verified online orders.</p>
+        <p>Shared customer records across online and registered sales channels.</p>
         <button className="secondary-button" type="button" onClick={() => void load()} title="Refresh customer analytics">
           <RefreshCw /><span>Refresh</span>
         </button>
       </div>
       {error && <div className="alert" role="alert">{error}</div>}
       <section className="customer-metrics" aria-label="Customer statistics">
-        <Metric label="Total customers" value={String(customers.length)} detail={`${orders.length} online orders`} />
-        <Metric label="Returning customers" value={String(returningCustomers)} detail={customers.length ? `${Math.round((returningCustomers / customers.length) * 100)}% of customers` : "No order history yet"} />
-        <Metric label="Average order" value={peso.format(averageOrder)} detail="Across online orders" />
-        <Metric label="Regions served" value={String(regions.length)} detail="Based on shipping addresses" />
+        <Metric label="Total customers" value={String(channelSummary.total)} detail="Across all sales channels" />
+        <Metric label="Online customers" value={String(channelSummary.online)} detail="Registered through website checkout" />
+        <Metric label="Baguio customers" value={String(channelSummary.baguio)} detail="Registered for Baguio Sales" />
+        <Metric label="Multi-channel" value={String(channelSummary.multipleChannels)} detail="Customers active in both channels" />
       </section>
+      <div className="mt-8"><p className="eyebrow">Online sales geography</p><p className="m-0 text-sm text-[var(--muted)]">The map and regional revenue below use structured delivery addresses from website orders.</p></div>
       <div className="demographics-grid">
         <section className="analytics-card map-card">
           <header><div><span className="card-icon"><Map /></span><div><h2>Order demographics</h2><p>All online orders mapped by shipping region</p></div></div></header>
@@ -105,7 +122,7 @@ export function CustomerAnalytics() {
       </div>
       <section className="customer-directory">
         <header>
-          <div><UsersRound /><div><h2>Customer directory</h2><p>{customers.length} customer{customers.length === 1 ? "" : "s"} with completed checkout records</p></div></div>
+          <div><UsersRound /><div><h2>Customer directory</h2><p>{customers.length} customer{customers.length === 1 ? "" : "s"} across all channels</p></div></div>
           <label className="customer-search"><span className="sr-only">Search customers</span><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search customers" /></label>
         </header>
         <CustomerTable customers={visibleCustomers} />
@@ -133,7 +150,7 @@ function RegionBars({ regions }: { regions: ReturnType<typeof summarizeRegions> 
 function CustomerTable({ customers }: { customers: ReturnType<typeof summarizeCustomers> }) {
   if (!customers.length) return <div className="chart-empty">No matching customers.</div>;
   return <div className="customer-table-wrap"><table className="customer-table"><thead><tr><th>Customer</th><th>Contact</th><th>Latest location</th><th>Orders</th><th>Total spent</th><th>Last order</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{customers.map((customer) => (
-    <tr key={customer.id}><td><strong>{customer.name}</strong><small>{customer.orderCount > 1 ? "Returning" : "New customer"}</small></td><td><a href={`mailto:${customer.email}`}>{customer.email}</a><small>{customer.phone}</small></td><td>{customer.location}</td><td>{customer.orderCount}</td><td>{peso.format(customer.totalSpent)}</td><td>{date.format(new Date(customer.latestOrderAt))}</td><td><a className="customer-view-link" href={`#customers/${customer.id}`}>View</a></td></tr>
+    <tr key={customer.id}><td><strong>{customer.name}</strong><small>{customer.orderCount > 1 ? "Returning" : customer.orderCount ? "New customer" : "Registered customer"}</small></td><td>{customer.email ? <a href={`mailto:${customer.email}`}>{customer.email}</a> : <span>—</span>}<small>{customer.phone}</small></td><td>{customer.location}</td><td>{customer.orderCount}</td><td>{peso.format(customer.totalSpent)}</td><td>{customer.orderCount ? date.format(new Date(customer.latestOrderAt)) : "—"}</td><td><a className="customer-view-link" href={`#customers/${customer.id}`}>View</a></td></tr>
   ))}</tbody></table></div>;
 }
 

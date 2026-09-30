@@ -29,7 +29,7 @@ export function CustomerDetails({ customer, orders, loading, error }: CustomerDe
         <div>
           <p className="eyebrow">Customer profile</p>
           <h2>{customer.name}</h2>
-          <span>{customer.orderCount > 1 ? "Returning customer" : "New customer"}</span>
+          <span>{customer.orderCount > 1 ? "Returning customer" : customer.orderCount ? "New customer" : "Registered customer"}</span>
         </div>
         <dl>
           <div><dt>Total orders</dt><dd>{customer.orderCount}</dd></div>
@@ -40,12 +40,12 @@ export function CustomerDetails({ customer, orders, loading, error }: CustomerDe
         <h3>Contact and latest delivery location</h3>
         <div>
           <a href={`tel:${customer.phone}`}><Phone />{customer.phone}</a>
-          <a href={`mailto:${customer.email}`}><Mail />{customer.email}</a>
+          {customer.email && <a href={`mailto:${customer.email}`}><Mail />{customer.email}</a>}
           <span><MapPin />{customer.location}</span>
         </div>
-        <p>The normalized mobile number identifies this customer across checkouts.</p>
+        <p>This shared profile identifies the customer across Romana sales channels.</p>
       </section>
-      {!loading && !error && (
+      {!loading && !error && orders.length > 0 && (
         <section className="customer-used-details">
           <header><h3>Checkout details used</h3><p>Historical information entered on orders under {customer.phone}</p></header>
           <div className="customer-used-grid">
@@ -73,7 +73,7 @@ export function CustomerDetails({ customer, orders, loading, error }: CustomerDe
       )}
       <section className="customer-order-history">
         <header><ShoppingBag /><div><h3>Order history</h3><p>All {orders.length} orders associated with this mobile number</p></div></header>
-        {loading ? <div className="customer-history-status" role="status">Loading complete order history…</div> : error ? <div className="alert" role="alert">{error}</div> : <div className="customer-orders-table-wrap">
+        {loading ? <div className="customer-history-status" role="status">Loading complete order history…</div> : error ? <div className="alert" role="alert">{error}</div> : !orders.length ? <div className="customer-history-status">No online orders for this customer yet.</div> : <div className="customer-orders-table-wrap">
           <table className="customer-orders-table">
             <thead><tr><th>Order</th><th>Date</th><th>Items</th><th>Ship to</th><th>Status</th><th>Total</th><th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>{sortedOrders.map((order) => <CustomerOrderRow key={order.id} order={order} />)}</tbody>

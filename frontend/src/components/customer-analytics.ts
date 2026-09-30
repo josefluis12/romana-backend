@@ -1,4 +1,5 @@
 import type { Order } from "../types/order";
+import type { BaguioClient } from "../types/channel-sale";
 
 export interface CustomerSummary {
   id: string;
@@ -15,6 +16,28 @@ export interface RegionSummary {
   name: string;
   orderCount: number;
   revenue: number;
+}
+
+export interface CustomerChannelSummary {
+  total: number;
+  online: number;
+  baguio: number;
+  multipleChannels: number;
+}
+
+export function summarizeCustomerChannels(
+  directory: BaguioClient[],
+  onlineCustomers: BaguioClient[],
+  baguioCustomers: BaguioClient[],
+): CustomerChannelSummary {
+  const onlineIds = new Set(onlineCustomers.map((customer) => customer.id));
+  const baguioIds = new Set(baguioCustomers.map((customer) => customer.id));
+  return {
+    total: directory.length,
+    online: onlineIds.size,
+    baguio: baguioIds.size,
+    multipleChannels: [...onlineIds].filter((id) => baguioIds.has(id)).length,
+  };
 }
 
 export function summarizeCustomers(orders: Order[]): CustomerSummary[] {
@@ -35,6 +58,23 @@ export function summarizeCustomers(orders: Order[]): CustomerSummary[] {
     });
   }
   return [...customers.values()].sort((left, right) => right.latestOrderAt.localeCompare(left.latestOrderAt));
+}
+
+export function mergeCustomerDirectory(directory: BaguioClient[], orders: Order[]): CustomerSummary[] {
+  const orderCustomers = new Map(summarizeCustomers(orders).map((customer) => [customer.id, customer]));
+  const customers = directory.map((customer): CustomerSummary => orderCustomers.get(customer.id) ?? ({
+    id: customer.id,
+    email: customer.email,
+    name: customer.name,
+    phone: customer.phone,
+    orderCount: 0,
+    totalSpent: 0,
+    latestOrderAt: customer.createdAt,
+    location: customer.address || "No address recorded",
+  }));
+  const directoryIds = new Set(directory.map((customer) => customer.id));
+  customers.push(...[...orderCustomers.values()].filter((customer) => !directoryIds.has(customer.id)));
+  return customers.sort((left, right) => right.latestOrderAt.localeCompare(left.latestOrderAt));
 }
 
 export function summarizeRegions(orders: Order[]): RegionSummary[] {

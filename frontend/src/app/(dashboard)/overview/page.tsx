@@ -2,19 +2,24 @@ import { useEffect, useState } from "react";
 import {
   ChartNoAxesCombined,
   Box,
-  LogOut,
+  MapPinned,
   Package,
+  PackagePlus,
+  Route,
   ShoppingBag,
   Tags,
+  UsersRound,
   Users,
 } from "lucide-react";
 import { ProductCatalog } from "../../../components/ProductCatalog";
 import { OrderTracker } from "../../../components/OrderTracker";
-import { CustomerAnalytics } from "../../../components/CustomerAnalytics";
+import { CustomersPage } from "../customers/page";
 import { StatisticsPage } from "../statistics/page";
+import { BaguioSalesPage } from "../baguio-sales/page";
 import type { AuthenticatedUser } from "../../../types/auth";
+import { AccountMenu } from "./_components/AccountMenu";
 
-type DashboardTab = "overview" | "orders" | "products" | "customers" | "statistics";
+type DashboardTab = "overview" | "orders" | "baguio-sales" | "products" | "customers" | "statistics";
 
 interface DashboardPageProps {
   user: AuthenticatedUser;
@@ -62,7 +67,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
       <aside className="sidebar min-w-0">
         <div className="sidebar-brand">
           <img className="sidebar-logo" src="/logo.png" alt="Romana" />
-          <small>Shop admin</small>
+          <small>Operations</small>
         </div>
         <nav aria-label="Main navigation">
           <a
@@ -77,6 +82,17 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
             <Package />
             <span>Orders</span>
           </a>
+          <a className={activeTab === "baguio-sales" ? "active" : undefined} href="#baguio-sales" aria-current={activeTab === "baguio-sales" ? "page" : undefined}>
+            <MapPinned />
+            <span>Baguio Sales</span>
+          </a>
+          {activeTab === "baguio-sales" && (
+            <div className="ml-5 grid gap-1 border-l border-[#4a4742] pl-3 max-[800px]:hidden" aria-label="Baguio Sales actions">
+              <a className="!h-9 !gap-2 !px-3 !text-xs" href="#baguio-sales/new-order"><PackagePlus className="!size-4" /><span>New order</span></a>
+              <a className="!h-9 !gap-2 !px-3 !text-xs" href="#baguio-sales/new-dispatch"><Route className="!size-4" /><span>New dispatch</span></a>
+              <a className="!h-9 !gap-2 !px-3 !text-xs" href="#baguio-sales/drivers"><UsersRound className="!size-4" /><span>Drivers</span></a>
+            </div>
+          )}
           <a
             className={activeTab === "products" ? "active" : undefined}
             href="#products"
@@ -111,23 +127,20 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
             </p>
             <h1>{tabHeading(activeTab)}</h1>
           </div>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={handleLogout}
-            disabled={loggingOut}
-            title="Sign out"
-          >
-            <LogOut />
-            <span>{loggingOut ? "Signing out..." : "Sign out"}</span>
-          </button>
+          <AccountMenu
+            user={user}
+            loggingOut={loggingOut}
+            onSignOut={handleLogout}
+          />
         </header>
         {activeTab === "products" ? (
           <ProductCatalog csrfToken={user.csrfToken} />
         ) : activeTab === "orders" ? (
           <OrderTracker csrfToken={user.csrfToken} />
+        ) : activeTab === "baguio-sales" ? (
+          <BaguioSalesPage csrfToken={user.csrfToken} preparedByName={user.name} />
         ) : activeTab === "customers" ? (
-          <CustomerAnalytics />
+          <CustomersPage csrfToken={user.csrfToken} />
         ) : activeTab === "statistics" ? (
           <StatisticsPage />
         ) : (
@@ -175,6 +188,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
 }
 
 function readTab(): DashboardTab {
+  if (window.location.hash.startsWith("#baguio-sales")) return "baguio-sales";
   if (window.location.hash.startsWith("#orders")) return "orders";
   if (window.location.hash === "#products") return "products";
   if (window.location.hash.startsWith("#customers")) return "customers";
@@ -183,6 +197,7 @@ function readTab(): DashboardTab {
 }
 
 function tabHeading(tab: DashboardTab): string {
+  if (tab === "baguio-sales") return "Baguio Sales";
   if (tab === "products") return "Products";
   if (tab === "orders") return "Order tracker";
   if (tab === "customers") return "Customers";
@@ -191,6 +206,7 @@ function tabHeading(tab: DashboardTab): string {
 }
 
 function tabEyebrow(tab: DashboardTab): string {
+  if (tab === "baguio-sales") return "Sales channel";
   if (tab === "products") return "Catalog";
   if (tab === "orders") return "Fulfilment";
   if (tab === "customers") return "Audience insights";
