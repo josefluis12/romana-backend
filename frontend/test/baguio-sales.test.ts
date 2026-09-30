@@ -23,8 +23,8 @@ test("distinguishes dispatch detail URLs from order detail URLs", () => {
 test("routes Baguio Sales sidebar actions without treating them as order ids", () => {
   assert.equal(readBaguioSalesSubview("#baguio-sales/new-order"), "new-order");
   assert.equal(readBaguioSalesSubview("#baguio-sales/new-dispatch"), "new-dispatch");
-  assert.equal(readBaguioSalesSubview("#baguio-sales/drivers"), "drivers");
-  assert.equal(readBaguioSalesSubview("#baguio-sales/new-driver"), "new-driver");
+  assert.equal(readBaguioSalesSubview("#baguio-sales/drivers"), null);
+  assert.equal(readBaguioSalesSubview("#baguio-sales/new-driver"), null);
   assert.equal(readSelectedBaguioSaleId("#baguio-sales/new-driver"), null);
 });
 

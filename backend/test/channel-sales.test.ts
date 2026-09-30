@@ -6,7 +6,8 @@ import { createApp } from "../src/app.js";
 import type { ChannelSaleActor, ChannelSalesRepository } from "../src/repositories/channel-sales.js";
 import type { AuthService } from "../src/supabase-auth.js";
 import type { BaguioClient, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, InventoryLocation } from "../src/types/channel-sales.js";
-import type { DispatchDriverService } from "../src/services/dispatch-drivers.js";
+import type { SystemUserService } from "../src/services/system-users.js";
+import type { SystemUser } from "../src/types/system-user.js";
 
 const user = { id: "11111111-1111-4111-8111-111111111111", email: "staff@example.com", user_metadata: { full_name: "Maria Santos" } } as User;
 const driverUser = { id: "55555555-5555-4555-8555-555555555555", email: "driver@example.com", app_metadata: { role: "dispatch_driver" }, user_metadata: { first_name: "Demo", middle_name: "Sample", last_name: "Driver" } } as User;
@@ -87,17 +88,20 @@ const repository: ChannelSalesRepository = {
     return allowAdvance;
   },
 };
-const dispatchDrivers: DispatchDriverService = {
-  list: async () => [driver],
+const systemUser: SystemUser = { ...driver, role: "dispatch_driver" };
+const systemUsers: SystemUserService = {
+  list: async () => [systemUser],
+  listDrivers: async () => [driver],
   create: async (account) => ({
     userId: driver.userId,
     name: [account.firstName, account.middleName, account.lastName].filter(Boolean).join(" "),
     email: account.email,
+    role: account.role,
   }),
 };
 
 async function withServer(run: (origin: string) => Promise<void>) {
-  const server = createApp({ auth, channelSales: repository, dispatchDrivers }).listen(0, "127.0.0.1");
+  const server = createApp({ auth, channelSales: repository, systemUsers }).listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
   try {
     await run(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
@@ -135,16 +139,28 @@ test("creates and starts a dispatch that owns multiple orders", async () => {
   });
 });
 
-test("creates driver accounts and restricts driver dispatches by authenticated user", async () => {
+test("creates system users and restricts driver dispatches by authenticated user", async () => {
   listedForDriver = undefined;
   await withServer(async (origin) => {
-    const createdAccount = await fetch(`${origin}/api/dispatch-drivers`, {
+    const listedAccounts = await fetch(`${origin}/api/system-users`, { headers: { Cookie: cookie } });
+    assert.equal(listedAccounts.status, 200);
+    assert.deepEqual(await listedAccounts.json(), { users: [systemUser] });
+
+    const createdAccount = await fetch(`${origin}/api/system-users`, {
       method: "POST",
       headers: { Cookie: cookie, "Content-Type": "application/json", "X-CSRF-Token": "csrf-token" },
-      body: JSON.stringify({ firstName: "Demo", middleName: "Sample", lastName: "Driver", email: driver.email, temporaryPassword: "temporary-pass-123" }),
+      body: JSON.stringify({ firstName: "Demo", middleName: "Sample", lastName: "Driver", email: driver.email, role: "dispatch_driver", password: "temporary-pass-123", passwordConfirmation: "temporary-pass-123" }),
     });
     assert.equal(createdAccount.status, 201);
-    assert.deepEqual(await createdAccount.json(), { driver });
+    assert.deepEqual(await createdAccount.json(), { user: systemUser });
+
+    const rejectedAccount = await fetch(`${origin}/api/system-users`, {
+      method: "POST",
+      headers: { Cookie: cookie, "Content-Type": "application/json", "X-CSRF-Token": "csrf-token" },
+      body: JSON.stringify({ firstName: "Demo", middleName: "", lastName: "Driver", email: driver.email, role: "dispatch_driver", password: "temporary-pass-123", passwordConfirmation: "different-pass-123" }),
+    });
+    assert.equal(rejectedAccount.status, 400);
+    assert.deepEqual(await rejectedAccount.json(), { error: "The password confirmation does not match." });
 
     const assigned = await fetch(`${origin}/api/driver/dispatches`, { headers: { Authorization: "Bearer driver-token" } });
     assert.equal(assigned.status, 200);

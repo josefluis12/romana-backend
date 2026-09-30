@@ -23,7 +23,8 @@ import { createSupabaseChannelSalesRepository, type ChannelSalesRepository } fro
 import { registerChannelSalesRoutes } from "./routes/channel-sales.js";
 import { getAuthenticatedUserName } from "./authenticated-user.js";
 import { registerDispatchDriverRoutes } from "./routes/dispatch-drivers.js";
-import { createSupabaseDispatchDriverService, isDispatchDriver, type DispatchDriverService } from "./services/dispatch-drivers.js";
+import { createSupabaseSystemUserService, isDispatchDriver, type SystemUserService } from "./services/system-users.js";
+import { registerSystemUserRoutes } from "./routes/system-users.js";
 import { createSessionManager, type ResolvedSession } from "./session-manager.js";
 interface AppDependencies {
   auth?: AuthService;
@@ -32,7 +33,7 @@ interface AppDependencies {
   maya?: MayaCheckoutService;
   orders?: OrderRepository;
   channelSales?: ChannelSalesRepository;
-  dispatchDrivers?: DispatchDriverService;
+  systemUsers?: SystemUserService;
 }
 
 export function createApp({
@@ -42,7 +43,7 @@ export function createApp({
   maya = createMayaCheckoutService(config.mayaApiUrl, config.mayaPublicKey, config.storefrontOrigin),
   orders = createSupabaseOrderRepository(config.supabaseUrl, config.supabaseSecretKey),
   channelSales = createSupabaseChannelSalesRepository(config.supabaseUrl, config.supabaseSecretKey),
-  dispatchDrivers = createSupabaseDispatchDriverService(config.supabaseUrl, config.supabaseSecretKey),
+  systemUsers = createSupabaseSystemUserService(config.supabaseUrl, config.supabaseSecretKey),
 }: AppDependencies = {}) {
   const app = express();
   const limiter = createAttemptLimiter();
@@ -172,7 +173,8 @@ export function createApp({
 
   registerOrderRoutes(app, orders, maya, resolveSession);
   registerChannelSalesRoutes(app, channelSales, resolveSession);
-  registerDispatchDriverRoutes(app, dispatchDrivers, channelSales, resolveSession);
+  registerDispatchDriverRoutes(app, systemUsers, channelSales, resolveSession);
+  registerSystemUserRoutes(app, systemUsers, resolveSession);
 
   app.post("/api/storefront/checkouts", async (request, response) => {
     const attemptKey = request.ip || "unknown";

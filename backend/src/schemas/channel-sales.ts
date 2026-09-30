@@ -1,4 +1,4 @@
-import type { BaguioClientInput, BaguioDispatchAction, BaguioDispatchInput, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriverInput } from "../types/channel-sales.js";
+import type { BaguioClientInput, BaguioDispatchAction, BaguioDispatchInput, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput } from "../types/channel-sales.js";
 import type { ShippingAddress } from "../types/order.js";
 
 interface ValidationResult {
@@ -85,21 +85,6 @@ export function validateBaguioDispatchInput(value: unknown): { dispatch?: Baguio
   if (typeof value.driverUserId !== "string" || !isUuid(value.driverUserId)) return { error: "Choose a valid driver." };
   if (notes === null) return { error: "Dispatch notes must be 500 characters or fewer." };
   return { dispatch: { vanLocationId: value.vanLocationId, driverUserId: value.driverUserId, notes } };
-}
-
-export function validateDispatchDriverInput(value: unknown): { driver?: DispatchDriverInput; error?: string } {
-  if (!isRecord(value)) return { error: "Enter the driver account details." };
-  const firstName = readText(value.firstName, 100);
-  const middleName = readText(value.middleName, 100, true);
-  const lastName = readText(value.lastName, 100);
-  const email = readText(value.email, 254);
-  const temporaryPassword = readText(value.temporaryPassword, 128);
-  if (!firstName) return { error: "Enter the driver's first name." };
-  if (middleName === null) return { error: "The driver's middle name must be 100 characters or fewer." };
-  if (!lastName) return { error: "Enter the driver's last name." };
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid driver email address." };
-  if (!temporaryPassword || temporaryPassword.length < 12) return { error: "Use a temporary password with at least 12 characters." };
-  return { driver: { firstName, middleName, lastName, email: email.toLowerCase(), temporaryPassword } };
 }
 
 export function readBaguioDispatchAction(value: string): BaguioDispatchAction | null {

@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import { advanceBaguioDispatch, advanceBaguioSale, createBaguioDispatch, createBaguioSale, createDispatchDriver, listBaguioClients, listBaguioDispatches, listBaguioSales, listDispatchDrivers, listVehicles, updateBaguioSale } from "../../../services/channel-sales";
+import { advanceBaguioDispatch, advanceBaguioSale, createBaguioDispatch, createBaguioSale, listBaguioClients, listBaguioDispatches, listBaguioSales, listDispatchDrivers, listVehicles, updateBaguioSale } from "../../../services/channel-sales";
 import { listProducts } from "../../../services/products";
-import type { BaguioClient, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, DispatchDriverInput, InventoryLocation } from "../../../types/channel-sale";
+import type { BaguioClient, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, InventoryLocation } from "../../../types/channel-sale";
 import type { Product } from "../../../types/product";
 import { BaguioDispatchForm } from "./_components/BaguioDispatchForm";
 import { BaguioDispatchDetails } from "./_components/BaguioDispatchDetails";
-import { BaguioDriverDirectory } from "./_components/BaguioDriverDirectory";
-import { BaguioDriverForm } from "./_components/BaguioDriverForm";
 import { BaguioOrdersByDispatch } from "./_components/BaguioOrdersByDispatch";
 import { BaguioSaleDetails } from "./_components/BaguioSaleDetails";
 import { BaguioSaleForm } from "./_components/BaguioSaleForm";
@@ -52,11 +50,6 @@ export function BaguioSalesPage({ csrfToken, preparedByName }: { csrfToken: stri
     try { const id = await createBaguioDispatch(input, csrfToken); setDispatches(await listBaguioDispatches()); window.location.hash = `baguio-sales/dispatches/${id}`; }
     catch (cause) { setError(messageFor(cause)); } finally { setSubmitting(false); }
   }
-  async function createDriver(input: DispatchDriverInput) {
-    setSubmitting(true); setError("");
-    try { const driver = await createDispatchDriver(input, csrfToken); setDrivers((current) => [...current, driver].sort((left, right) => left.name.localeCompare(right.name))); window.location.hash = "baguio-sales/drivers"; }
-    catch (cause) { setError(messageFor(cause)); } finally { setSubmitting(false); }
-  }
   async function advanceOrder(id: string, action: BaguioSaleAction) {
     setSubmitting(true); setError("");
     try { await advanceBaguioSale(id, action, csrfToken); await refreshOrders(); }
@@ -84,8 +77,6 @@ export function BaguioSalesPage({ csrfToken, preparedByName }: { csrfToken: stri
   if (selectedDispatch) return <><ErrorMessage value={error} /><BaguioDispatchDetails dispatch={selectedDispatch} updating={submitting} onAdvance={advanceDispatch} /></>;
   if (subview === "new-order") return <><ErrorMessage value={error} /><BaguioSaleForm products={products.filter((product) => product.isActive)} dispatches={dispatches} clients={clients} preparedByName={preparedByName} submitting={submitting} onCancel={returnToSales} onSubmit={createOrder} /></>;
   if (subview === "new-dispatch") return <><ErrorMessage value={error} /><BaguioDispatchForm expectedReference={getExpectedDispatchReference(dispatches)} vehicles={vehicles} drivers={drivers} submitting={submitting} onCancel={returnToSales} onSubmit={createDispatch} /></>;
-  if (subview === "new-driver") return <><ErrorMessage value={error} /><BaguioDriverForm submitting={submitting} onCancel={returnToDrivers} onSubmit={createDriver} /></>;
-  if (subview === "drivers") return <><ErrorMessage value={error} /><BaguioDriverDirectory drivers={drivers} /></>;
 
   return (
     <section className="mt-9">
@@ -96,7 +87,6 @@ export function BaguioSalesPage({ csrfToken, preparedByName }: { csrfToken: stri
             <option value="">Choose…</option>
             <option value="baguio-sales/new-order">New order</option>
             <option value="baguio-sales/new-dispatch">New dispatch</option>
-            <option value="baguio-sales/drivers">Drivers</option>
           </select>
         </label>
       </div>
@@ -107,7 +97,6 @@ export function BaguioSalesPage({ csrfToken, preparedByName }: { csrfToken: stri
 }
 
 function returnToSales() { window.location.hash = "baguio-sales"; }
-function returnToDrivers() { window.location.hash = "baguio-sales/drivers"; }
 
 function ErrorMessage({ value }: { value: string }) { return value ? <div className="alert" role="alert">{value}</div> : null; }
 function messageFor(cause: unknown): string { return cause instanceof Error ? cause.message : "The Baguio sales workspace is unavailable."; }

@@ -1,25 +1,14 @@
 import { useEffect, useState } from "react";
-import {
-  ChartNoAxesCombined,
-  Box,
-  MapPinned,
-  Package,
-  PackagePlus,
-  Route,
-  ShoppingBag,
-  Tags,
-  UsersRound,
-  Users,
-} from "lucide-react";
+import { Box } from "lucide-react";
 import { ProductCatalog } from "../../../components/ProductCatalog";
 import { OrderTracker } from "../../../components/OrderTracker";
 import { CustomersPage } from "../customers/page";
 import { StatisticsPage } from "../statistics/page";
 import { BaguioSalesPage } from "../baguio-sales/page";
+import { SystemUsersPage } from "../users/page";
 import type { AuthenticatedUser } from "../../../types/auth";
 import { AccountMenu } from "./_components/AccountMenu";
-
-type DashboardTab = "overview" | "orders" | "baguio-sales" | "products" | "customers" | "statistics";
+import { SidebarNavigation, type DashboardTab } from "./_components/SidebarNavigation";
 
 interface DashboardPageProps {
   user: AuthenticatedUser;
@@ -65,51 +54,11 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
   return (
     <div className="app-shell">
       <aside className="sidebar min-w-0">
-        <div className="sidebar-brand">
+        <div className="sidebar-brand max-[800px]:hidden">
           <img className="sidebar-logo" src="/logo.png" alt="Romana" />
-          <small>Operations</small>
+          <small>Admin portal</small>
         </div>
-        <nav aria-label="Main navigation">
-          <a
-            className={activeTab === "overview" ? "active" : undefined}
-            href="#overview"
-            aria-current={activeTab === "overview" ? "page" : undefined}
-          >
-            <ShoppingBag />
-            <span>Overview</span>
-          </a>
-          <a className={activeTab === "orders" ? "active" : undefined} href="#orders" aria-current={activeTab === "orders" ? "page" : undefined}>
-            <Package />
-            <span>Orders</span>
-          </a>
-          <a className={activeTab === "baguio-sales" ? "active" : undefined} href="#baguio-sales" aria-current={activeTab === "baguio-sales" ? "page" : undefined}>
-            <MapPinned />
-            <span>Baguio Sales</span>
-          </a>
-          {activeTab === "baguio-sales" && (
-            <div className="ml-5 grid gap-1 border-l border-[#4a4742] pl-3 max-[800px]:hidden" aria-label="Baguio Sales actions">
-              <a className="!h-9 !gap-2 !px-3 !text-xs" href="#baguio-sales/new-order"><PackagePlus className="!size-4" /><span>New order</span></a>
-              <a className="!h-9 !gap-2 !px-3 !text-xs" href="#baguio-sales/new-dispatch"><Route className="!size-4" /><span>New dispatch</span></a>
-              <a className="!h-9 !gap-2 !px-3 !text-xs" href="#baguio-sales/drivers"><UsersRound className="!size-4" /><span>Drivers</span></a>
-            </div>
-          )}
-          <a
-            className={activeTab === "products" ? "active" : undefined}
-            href="#products"
-            aria-current={activeTab === "products" ? "page" : undefined}
-          >
-            <Tags />
-            <span>Products</span>
-          </a>
-          <a className={activeTab === "customers" ? "active" : undefined} href="#customers" aria-current={activeTab === "customers" ? "page" : undefined}>
-            <Users />
-            <span>Customers</span>
-          </a>
-          <a className={activeTab === "statistics" ? "active" : undefined} href="#statistics" aria-current={activeTab === "statistics" ? "page" : undefined}>
-            <ChartNoAxesCombined />
-            <span>Statistics</span>
-          </a>
-        </nav>
+        <SidebarNavigation activeTab={activeTab} />
         <div className="account-block">
           <span className="avatar">{user.email.slice(0, 1).toUpperCase()}</span>
           <div>
@@ -141,6 +90,8 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
           <BaguioSalesPage csrfToken={user.csrfToken} preparedByName={user.name} />
         ) : activeTab === "customers" ? (
           <CustomersPage csrfToken={user.csrfToken} />
+        ) : activeTab === "users" ? (
+          <SystemUsersPage csrfToken={user.csrfToken} />
         ) : activeTab === "statistics" ? (
           <StatisticsPage />
         ) : (
@@ -192,6 +143,7 @@ function readTab(): DashboardTab {
   if (window.location.hash.startsWith("#orders")) return "orders";
   if (window.location.hash === "#products") return "products";
   if (window.location.hash.startsWith("#customers")) return "customers";
+  if (window.location.hash.startsWith("#users")) return "users";
   if (window.location.hash === "#statistics") return "statistics";
   return "overview";
 }
@@ -201,6 +153,7 @@ function tabHeading(tab: DashboardTab): string {
   if (tab === "products") return "Products";
   if (tab === "orders") return "Order tracker";
   if (tab === "customers") return "Customers";
+  if (tab === "users") return "System Users";
   if (tab === "statistics") return "Statistics";
   return "Shop overview";
 }
@@ -210,5 +163,6 @@ function tabEyebrow(tab: DashboardTab): string {
   if (tab === "products") return "Catalog";
   if (tab === "orders") return "Fulfilment";
   if (tab === "customers") return "Audience insights";
+  if (tab === "users") return "Access management";
   return "Performance insights";
 }

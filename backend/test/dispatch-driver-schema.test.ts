@@ -1,34 +1,40 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateDispatchDriverInput } from "../src/schemas/channel-sales.js";
+import { validateSystemUserInput } from "../src/schemas/system-user.js";
 
-test("validates and preserves separate driver name fields", () => {
-  const result = validateDispatchDriverInput({
+test("validates system users with a selected role and confirmed password", () => {
+  const result = validateSystemUserInput({
     firstName: "  Juan ",
     middleName: " Santos ",
     lastName: " Cruz ",
     email: "DRIVER@EXAMPLE.COM",
-    temporaryPassword: "temporary-pass-123",
+    role: "dispatch_driver",
+    password: "temporary-pass-123",
+    passwordConfirmation: "temporary-pass-123",
   });
 
   assert.deepEqual(result, {
-    driver: {
+    user: {
       firstName: "Juan",
       middleName: "Santos",
       lastName: "Cruz",
       email: "driver@example.com",
-      temporaryPassword: "temporary-pass-123",
+      role: "dispatch_driver",
+      password: "temporary-pass-123",
     },
   });
 });
 
-test("rejects a driver account without a last name", () => {
-  const result = validateDispatchDriverInput({
+test("rejects a user when password confirmation does not match", () => {
+  const result = validateSystemUserInput({
     firstName: "Juan",
     middleName: "",
+    lastName: "Cruz",
     email: "driver@example.com",
-    temporaryPassword: "temporary-pass-123",
+    role: "dispatch_driver",
+    password: "temporary-pass-123",
+    passwordConfirmation: "different-pass-123",
   });
 
-  assert.deepEqual(result, { error: "Enter the driver's last name." });
+  assert.deepEqual(result, { error: "The password confirmation does not match." });
 });

@@ -1,5 +1,5 @@
 import { fetchWithCsrf } from "./products";
-import type { BaguioClient, BaguioClientInput, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, DispatchDriverInput, InventoryLocation } from "../types/channel-sale";
+import type { BaguioClient, BaguioClientInput, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, InventoryLocation } from "../types/channel-sale";
 
 interface ErrorResponse { error?: string }
 
@@ -29,15 +29,6 @@ export async function listDispatchDrivers(): Promise<DispatchDriver[]> {
   const result = await readJson<{ drivers: DispatchDriver[]; error?: string }>(response);
   if (!response.ok) throw new Error(result.error || "Unable to load driver accounts.");
   return result.drivers;
-}
-
-export async function createDispatchDriver(input: DispatchDriverInput, csrfToken: string): Promise<DispatchDriver> {
-  const response = await fetchWithCsrf("/api/dispatch-drivers", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
-  }, csrfToken);
-  const result = await readJson<{ driver?: DispatchDriver; error?: string }>(response);
-  if (!response.ok || !result.driver) throw new Error(result.error || "Unable to create the driver account.");
-  return result.driver;
 }
 
 export async function listBaguioClients(): Promise<BaguioClient[]> {

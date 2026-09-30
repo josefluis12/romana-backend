@@ -78,14 +78,6 @@ export interface DispatchDriver {
   email: string;
 }
 
-export interface DispatchDriverInput {
-  firstName: string;
-  middleName: string;
-  lastName: string;
-  email: string;
-  temporaryPassword: string;
-}
-
 export interface BaguioDispatch extends Omit<BaguioDispatchInput, "driverUserId"> {
   id: string;
   referenceNumber: string;
