@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { ArrowLeft, Check, FileText, MapPin, Pencil, Phone, Printer } from "lucide-react";
+import { ArrowLeft, Check, FileText, MapPin, Pencil, Phone, Printer, RefreshCw } from "lucide-react";
 import type { BaguioSale, BaguioSaleAction, BaguioSaleUpdateInput } from "../../../../types/channel-sale";
 import type { Product } from "../../../../types/product";
 import type { BaguioDocumentKind } from "../_lib/continuous-form-pdf";
 import { baguioSaleProgressStages, getBaguioSaleProgressStage, getBaguioSaleStatusLabel } from "../_lib/workflow";
 import { BaguioDocumentInlinePreview, BaguioDocumentPreview } from "./BaguioDocumentPreview";
 import { BaguioSaleEditor } from "./BaguioSaleEditor";
+import { DriverDeliveryProofCard } from "./DriverDeliveryProofCard";
 
 const orderDate = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
 const actionByStatus: Partial<Record<BaguioSale["status"], { action: BaguioSaleAction; label: string }>> = {
@@ -19,12 +20,14 @@ const actionByStatus: Partial<Record<BaguioSale["status"], { action: BaguioSaleA
 interface BaguioSaleDetailsProps {
   sale: BaguioSale;
   products: Product[];
+  refreshing: boolean;
   updating: boolean;
   onAdvance: (action: BaguioSaleAction) => Promise<void>;
+  onRefresh: () => Promise<void>;
   onUpdate: (input: BaguioSaleUpdateInput) => Promise<boolean>;
 }
 
-export function BaguioSaleDetails({ sale, products, updating, onAdvance, onUpdate }: BaguioSaleDetailsProps) {
+export function BaguioSaleDetails({ sale, products, refreshing, updating, onAdvance, onRefresh, onUpdate }: BaguioSaleDetailsProps) {
   const [editing, setEditing] = useState(false);
   const [previewing, setPreviewing] = useState<BaguioDocumentKind | null>(null);
   const [inlineDocument, setInlineDocument] = useState<BaguioDocumentKind>("delivery-order");
@@ -47,6 +50,9 @@ export function BaguioSaleDetails({ sale, products, updating, onAdvance, onUpdat
             <p className="m-0 text-sm text-[var(--muted)]">Created {orderDate.format(new Date(sale.createdAt))}</p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <button className="secondary-button" type="button" disabled={updating || refreshing} onClick={() => void onRefresh()}>
+              <RefreshCw className={refreshing ? "animate-spin" : ""} />{refreshing ? "Refreshing…" : "Refresh status"}
+            </button>
             {editable && <button className="secondary-button" type="button" disabled={updating} onClick={() => setEditing(true)}><Pencil />Edit order</button>}
             {nextAction && <button className="primary-button compact-button" type="button" disabled={updating} onClick={() => void onAdvance(nextAction.action)}>{updating ? "Updating…" : nextAction.label}</button>}
           </div>
@@ -79,6 +85,7 @@ export function BaguioSaleDetails({ sale, products, updating, onAdvance, onUpdat
                   <Data label="Prepared by" value={sale.deliveryOrder.preparedByName} />
                 </dl>
               </section>
+              <DriverDeliveryProofCard proof={sale.deliveryReceipt.proof} />
               <DocumentCard title="Delivery Receipt" number={sale.deliveryReceipt.number} status={sale.deliveryReceipt.status} onPreview={() => setPreviewing("delivery-receipt")} />
             </aside>
           </div>

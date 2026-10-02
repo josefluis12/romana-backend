@@ -42,6 +42,15 @@ export interface BaguioSale extends Omit<BaguioSaleInput, "dispatchId" | "items"
     number: string;
     status: "pending" | "issued" | "cancelled";
     clientAcknowledgedAt: string | null;
+    proof: {
+      signature: Array<Array<{ x: number; y: number }>>;
+      signedAt: string;
+      latitude: number;
+      longitude: number;
+      accuracy: number;
+      driverUserId: string;
+      paymentMode: "cash" | "gcash" | "maya" | "bank_transfer" | "cheque" | null;
+    } | null;
   };
   items: Array<{
     productVariantId: string;
@@ -74,6 +83,26 @@ export interface BaguioDispatch extends Omit<BaguioDispatchInput, "driverUserId"
   driver: DispatchDriver | null;
   orders: BaguioSale[];
   originalAllocation: BaguioAllocationEntry[];
+  reconciliation: DispatchReconciliation | null;
+}
+
+export interface DispatchReconciliation {
+  submittedAt: string;
+  totalCollected: number;
+  notes: string;
+  orders: Array<{ orderId: string; outcome: "delivered" | "failed"; collectedAmount: number; failureReason: string }>;
+  inventory: Array<{
+    productVariantId: string;
+    productTitle: string;
+    variantLabel: string;
+    allocatedQuantity: number;
+    deliveredQuantity: number;
+    returnedQuantity: number;
+    damagedQuantity: number;
+    missingQuantity: number;
+    remainingQuantity: number;
+    notes: string;
+  }>;
 }
 
 export interface BaguioAllocationEntry {

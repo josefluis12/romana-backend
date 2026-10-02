@@ -1,8 +1,8 @@
 # Romana Operations Admin
 
 The private administration system and API foundation for Romana's sales channels
-and future ERP workflows. The online shop is one sales channel. The workspace
-consists of two independent TypeScript applications.
+and future ERP workflows. The online shop is one sales channel. The workspace also
+includes a separate Expo application for dispatch drivers.
 
 ## Architecture
 
@@ -17,6 +17,10 @@ frontend/
   src/           React admin interface
   public/        Browser assets
   package.json   Frontend dependencies and commands
+driver/
+  src/           Expo Router screens, mobile features, services, and types
+  assets/        Mobile app icons and splash assets
+  package.json   Expo and React Native dependencies and commands
 ```
 
 The frontend calls relative `/api/*` endpoints. Vite proxies those requests to the
@@ -39,6 +43,7 @@ Required backend variables:
 - `SUPABASE_SECRET_KEY`: a backend-only secret key used to persist paid orders and customers
 - `FRONTEND_ORIGIN`: the permitted admin frontend origin
 - `STOREFRONT_ORIGIN`: the permitted public storefront origin
+- `DRIVER_ORIGIN`: the permitted Expo web origin
 - `MAYA_API_URL`: Maya Checkout API origin; use `https://pg-sandbox.paymaya.com` for sandbox
 - `MAYA_PUBLIC_KEY`: the Maya Checkout public key used only by the backend; local sandbox development falls back to Maya's published shared test key
 
@@ -65,9 +70,12 @@ Order created → Pending approval → Approved → Loaded → In transit → De
 
 Loading records the product transfer from the factory to the dispatch's van inventory
 location. A dispatch can start only after all its orders are loaded; starting it moves
-every attached order to **In transit** atomically. The Delivery Receipt stays pending
-until the delivered order is confirmed successful. The DOF, DR, and per-order summary are printable. Prepared-by names are
-printed, while approval and client acknowledgment use manual signatures on paper.
+every attached order to **In transit** atomically. In the driver app, each in-transit
+order appears as a pending delivery. Marking it delivered requires the client's
+signature and foreground location; the API saves the signature, coordinates, accuracy,
+driver identity, and server timestamp atomically with the **Delivered** transition.
+The Delivery Receipt stays pending until the delivered order is confirmed successful.
+The DOF, DR, and per-order summary are printable.
 
 Order product lines, quantities, prices, and delivery notes can be revised until the
 order is delivered, including while its dispatch is in transit. For loaded orders,
@@ -83,11 +91,11 @@ creation and customers added during transit are tagged for reconciliation.
 Every new dispatch requires one driver account. Administrators create restricted
 driver accounts in the Baguio sales workspace and assign a driver while preparing
 the dispatch. Driver accounts carry the protected `dispatch_driver` role in Supabase
-Auth app metadata, cannot use admin APIs, and can retrieve only their own assignments
-from `GET /api/driver/dispatches` with a bearer access token. This endpoint is the
-security boundary intended for the future React Native driver application, which
-should authenticate through the Supabase mobile SDK and send its access token to the
-backend as `Authorization: Bearer <token>`.
+Auth app metadata and cannot use admin APIs. The driver application accepts only
+restricted driver accounts and retrieves assignments associated with the signed-in account
+from `GET /api/driver/dispatches` with a bearer access token. This endpoint should be
+called through the Supabase mobile SDK by sending its access token to the backend as
+`Authorization: Bearer <token>`.
 
 Customers are registered in the shared **Customers** workspace and associated with
 one or more sales channels. The Baguio customer tab supplies the directory used by
@@ -127,6 +135,7 @@ Install each application independently:
 ```bash
 npm install --prefix backend
 npm install --prefix frontend
+npm install --prefix driver
 ```
 
 Run the applications in separate terminals:
@@ -134,11 +143,14 @@ Run the applications in separate terminals:
 ```bash
 npm run dev:backend
 npm run dev:frontend
+npm run dev:driver
 ```
 
 - Admin frontend: `http://localhost:5173`
 - Admin API: `http://localhost:4322/api`
 - API health: `http://localhost:4322/api/health`
+
+See `driver/README.md` for mobile environment variables and device networking.
 
 ## Verification
 
@@ -193,5 +205,6 @@ redirects**, replacing the target hostname:
 
 This reverse proxy preserves the frontend's relative `/api` contract and same-site
 authentication cookies. Set `FRONTEND_ORIGIN` in Beanstalk to the exact Amplify HTTPS
-origin, and set `STOREFRONT_ORIGIN` to the public shop's exact origin. Point Maya's
-webhook directly to `https://your-backend.example/api/webhooks/maya`.
+origin, `STOREFRONT_ORIGIN` to the public shop's exact origin, and `DRIVER_ORIGIN` to
+the deployed driver web origin. Point Maya's webhook directly to
+`https://your-backend.example/api/webhooks/maya`.

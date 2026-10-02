@@ -5,8 +5,9 @@
   "scripts": {
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
-    "build": "npm --prefix backend run build && npm --prefix frontend run build",
-    "check": "npm --prefix backend run check && npm --prefix frontend run check",
+    "dev:driver": "npm --prefix driver start",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build && npm --prefix driver run build",
+    "check": "npm --prefix backend run check && npm --prefix frontend run check && npm --prefix driver run check",
     "test": "npm --prefix backend test"
   }
 }

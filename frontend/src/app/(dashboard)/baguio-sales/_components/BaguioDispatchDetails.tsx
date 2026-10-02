@@ -1,20 +1,24 @@
-import { useState } from "react";
-import { ArrowLeft, Check, Printer } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, Check, MapPin, Printer } from "lucide-react";
 import type { BaguioAllocationEntry, BaguioDispatch, BaguioDispatchAction } from "../../../../types/channel-sale";
+import { getDispatchLocations } from "../_lib/dispatch-location";
 import { printBaguioDispatchLoadSheet } from "../_lib/print-document";
 import { getBaguioSaleStatusLabel } from "../_lib/workflow";
+import { DispatchLocationMap } from "./DispatchLocationMap";
+import { DispatchReconciliationReport } from "./DispatchReconciliationReport";
 
 const progressSteps = ["Preparing", "In transit", "Completed"];
-type AllocationTab = "original" | "current";
+const pingDate = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
+type DispatchTab = "original" | "current" | "map" | "reconciliation";
 
 export function BaguioDispatchDetails({ dispatch, updating, onAdvance }: {
   dispatch: BaguioDispatch;
   updating: boolean;
   onAdvance: (id: string, action: BaguioDispatchAction) => Promise<void>;
 }) {
-  const [allocationTab, setAllocationTab] = useState<AllocationTab>("current");
+  const [activeTab, setActiveTab] = useState<DispatchTab>("current");
+  const locations = useMemo(() => getDispatchLocations(dispatch), [dispatch]);
   const canStart = dispatch.orders.length > 0 && dispatch.orders.every((order) => order.status === "loaded");
-  const canComplete = dispatch.orders.length > 0 && dispatch.orders.every((order) => order.status === "delivered" || order.status === "successful");
   const currentAllocation = dispatch.orders.flatMap((order) => order.items.map((item) => ({
     orderId: order.id,
     orderReferenceNumber: order.referenceNumber,
@@ -40,15 +44,17 @@ export function BaguioDispatchDetails({ dispatch, updating, onAdvance }: {
             <Status value={dispatch.status} />
             <button className="secondary-button" type="button" disabled={!dispatch.orders.length} onClick={() => printBaguioDispatchLoadSheet(dispatch)}><Printer />Print driver load sheet</button>
             {dispatch.status === "preparing" && <button className="primary-button compact-button" disabled={updating || !canStart} onClick={() => void onAdvance(dispatch.id, "start")}>Start dispatch</button>}
-            {dispatch.status === "in_transit" && <button className="primary-button compact-button" disabled={updating || !canComplete} onClick={() => void onAdvance(dispatch.id, "complete")}>Complete dispatch</button>}
+            {dispatch.status === "in_transit" && <span className="text-xs font-bold text-[var(--muted)]">Awaiting driver reconciliation</span>}
           </div>
         </header>
         <DispatchProgress status={dispatch.status} />
-        <div className="mt-7 flex border-b border-[var(--line)]" role="tablist" aria-label="Dispatch allocation reports">
-          <AllocationTabButton id="original-allocation-tab" active={allocationTab === "original"} controls="original-allocation-panel" onClick={() => setAllocationTab("original")}>Original allocation</AllocationTabButton>
-          <AllocationTabButton id="current-allocation-tab" active={allocationTab === "current"} controls="current-allocation-panel" onClick={() => setAllocationTab("current")}>{dispatch.status === "completed" ? "Post-delivery allocation" : "Current allocation"}</AllocationTabButton>
+        <div className="mt-7 flex overflow-x-auto border-b border-[var(--line)]" role="tablist" aria-label="Dispatch details">
+          <DispatchTabButton id="original-allocation-tab" active={activeTab === "original"} controls="original-allocation-panel" onClick={() => setActiveTab("original")}>Original allocation</DispatchTabButton>
+          <DispatchTabButton id="current-allocation-tab" active={activeTab === "current"} controls="current-allocation-panel" onClick={() => setActiveTab("current")}>{dispatch.status === "completed" ? "Post-delivery allocation" : "Current allocation"}</DispatchTabButton>
+          <DispatchTabButton id="driver-map-tab" active={activeTab === "map"} controls="driver-map-panel" onClick={() => setActiveTab("map")}>Driver map</DispatchTabButton>
+          <DispatchTabButton id="reconciliation-tab" active={activeTab === "reconciliation"} controls="reconciliation-panel" onClick={() => setActiveTab("reconciliation")}>Reconciliation</DispatchTabButton>
         </div>
-        <div id="original-allocation-panel" role="tabpanel" aria-labelledby="original-allocation-tab" hidden={allocationTab !== "original"}>
+        <div id="original-allocation-panel" role="tabpanel" aria-labelledby="original-allocation-tab" hidden={activeTab !== "original"}>
           <AllocationReport
             title="Pre-dispatch allocation"
             description="Original order allocation captured when the dispatch entered transit."
@@ -57,7 +63,7 @@ export function BaguioDispatchDetails({ dispatch, updating, onAdvance }: {
             emptyMessage={dispatch.status === "preparing" ? "This report will be captured when the dispatch starts." : "No original allocation was recorded."}
           />
         </div>
-        <div id="current-allocation-panel" role="tabpanel" aria-labelledby="current-allocation-tab" hidden={allocationTab !== "current"}>
+        <div id="current-allocation-panel" role="tabpanel" aria-labelledby="current-allocation-tab" hidden={activeTab !== "current"}>
           <AllocationReport
             title={dispatch.status === "completed" ? "Post-delivery allocation" : "Current allocation"}
             description="Latest orders and item quantities after reallocations and additional clients."
@@ -67,19 +73,72 @@ export function BaguioDispatchDetails({ dispatch, updating, onAdvance }: {
             showTags
           />
         </div>
+        <div id="driver-map-panel" role="tabpanel" aria-labelledby="driver-map-tab" hidden={activeTab !== "map"}>
+          {activeTab === "map" && <DispatchLocationPins locations={locations} />}
+        </div>
+        <div id="reconciliation-panel" role="tabpanel" aria-labelledby="reconciliation-tab" hidden={activeTab !== "reconciliation"}>
+          <DispatchReconciliationReport dispatch={dispatch} />
+        </div>
       </div>
     </section>
   );
 }
 
-function AllocationTabButton({ id, active, controls, onClick, children }: {
+function DispatchLocationPins({ locations }: {
+  locations: ReturnType<typeof getDispatchLocations>;
+}) {
+  if (!locations.length) {
+    return (
+      <section className="mt-5 rounded border border-dashed border-[var(--line)] p-4" aria-label="Latest driver location">
+        <h3 className="m-0 text-sm">Latest driver ping</h3>
+        <p className="mb-0 mt-1 text-xs text-[var(--muted)]">No location has been recorded yet. A pin will appear after the driver submits a signed delivery.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-5 rounded border border-[var(--line)] bg-[var(--paper)] p-4" aria-label="Latest driver location">
+      <div className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#f7e5e5] text-[var(--red)]"><MapPin className="size-4" /></span>
+        <div className="min-w-0 flex-1">
+          <h3 className="m-0 text-sm">Driver location pings</h3>
+          <p className="mb-0 mt-1 text-xs text-[var(--muted)]">Numbered from the first recorded delivery to the most recent.</p>
+        </div>
+      </div>
+      <DispatchLocationMap locations={locations} />
+      <ol className="mb-0 mt-4 grid gap-2 p-0 sm:grid-cols-2">
+        {locations.map((location, index) => <DispatchPingItem location={location} number={index + 1} key={location.orderId} />)}
+      </ol>
+    </section>
+  );
+}
+
+function DispatchPingItem({ location, number }: {
+  location: ReturnType<typeof getDispatchLocations>[number];
+  number: number;
+}) {
+  const coordinates = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`;
+  return (
+    <li className="flex min-w-0 gap-3 rounded border border-[var(--line)] bg-white p-3">
+      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[var(--red)] text-xs font-bold text-white">{number}</span>
+      <div className="min-w-0">
+        <strong className="block truncate text-xs">{location.orderReferenceNumber} · {location.clientName}</strong>
+        <span className="mt-0.5 block text-[10px] text-[var(--muted)]">{pingDate.format(new Date(location.signedAt))} · accuracy ±{Math.round(location.accuracy)} m</span>
+        <a className="mt-1 block truncate font-mono text-[10px] font-bold text-[var(--red)] hover:underline" href={googleMapsUrl} target="_blank" rel="noreferrer">{coordinates}</a>
+      </div>
+    </li>
+  );
+}
+
+function DispatchTabButton({ id, active, controls, onClick, children }: {
   id: string;
   active: boolean;
   controls: string;
   onClick: () => void;
   children: string;
 }) {
-  return <button id={id} className={`border-0 border-b-2 bg-transparent px-4 py-3 text-sm font-bold ${active ? "border-[var(--red)] text-[var(--red)]" : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"}`} type="button" role="tab" aria-selected={active} aria-controls={controls} onClick={onClick}>{children}</button>;
+  return <button id={id} className={`shrink-0 border-0 border-b-2 bg-transparent px-4 py-3 text-sm font-bold ${active ? "border-[var(--red)] text-[var(--red)]" : "border-transparent text-[var(--muted)] hover:text-[var(--ink)]"}`} type="button" role="tab" aria-selected={active} aria-controls={controls} onClick={onClick}>{children}</button>;
 }
 
 function DispatchProgress({ status }: { status: BaguioDispatch["status"] }) {

@@ -11,9 +11,15 @@ import type {
   ChannelSaleStatus,
   DeliveryOrderStatus,
   DeliveryReceiptStatus,
+  DriverDeliveryProof,
+  DispatchReconciliationInput,
   InventoryLocation,
 } from "../types/channel-sales.js";
 import { loadDispatchDriver, readDispatchDriver } from "./dispatch-driver-account.js";
+import { completeDriverDelivery } from "./driver-delivery.js";
+import { readDispatchReconciliation, reconcileAssignedDriverDispatch } from "./dispatch-reconciliation.js";
+import { readBaguioClient } from "./channel-sales-readers.js";
+import { readSavedDriverDeliveryProof } from "./delivery-proof.js";
 
 export interface ChannelSaleActor {
   userId: string;
@@ -34,10 +40,13 @@ export interface ChannelSalesRepository {
   createBaguioDispatch(input: BaguioDispatchInput, actor: ChannelSaleActor): Promise<string>;
   advanceBaguioDispatch(id: string, action: BaguioDispatchAction, actor: ChannelSaleActor): Promise<boolean>;
   advanceBaguioSale(id: string, action: BaguioSaleAction, actor: ChannelSaleActor): Promise<boolean>;
+  completeDriverDelivery(id: string, proof: DriverDeliveryProof, actor: ChannelSaleActor): Promise<boolean>;
+  reconcileDriverDispatch(id: string, input: DispatchReconciliationInput, actor: ChannelSaleActor): Promise<boolean>;
 }
 
-const saleSelect = "id,reference_number,status,customer_id,dispatch_id,added_after_departure,client_name,client_address,client_phone,delivery_notes,total,created_at,inventory_locations(id,code,name,type),channel_sale_items(product_variant_id,product_title,variant_label,quantity,unit_price,line_total),channel_sale_revisions(id),delivery_order_forms(document_number,status,prepared_by_name),delivery_receipts(document_number,status,client_acknowledged_at)";
-const dispatchSelect = "id,reference_number,status,van_location_id,driver_user_id,driver_name,driver_email,notes,created_at,departed_at,inventory_locations(id,code,name,type)";
+const saleSelect = "id,reference_number,status,customer_id,dispatch_id,added_after_departure,client_name,client_address,client_phone,delivery_notes,total,created_at,inventory_locations(id,code,name,type),channel_sale_items(product_variant_id,product_title,variant_label,quantity,unit_price,line_total),channel_sale_revisions(id),delivery_order_forms(document_number,status,prepared_by_name),delivery_receipts(document_number,status,client_acknowledged_at,client_signature,signed_at,signed_latitude,signed_longitude,location_accuracy,signed_by_driver_user_id,payment_mode)";
+const reconciliationSelect = "baguio_dispatch_reconciliations(submitted_at,total_collected,notes,baguio_dispatch_reconciliation_orders(order_id,outcome,collected_amount,failure_reason),baguio_dispatch_reconciliation_inventory(product_variant_id,product_title,variant_label,allocated_quantity,delivered_quantity,returned_quantity,damaged_quantity,missing_quantity,remaining_quantity,notes))";
+const dispatchSelect = `id,reference_number,status,van_location_id,driver_user_id,driver_name,driver_email,notes,created_at,departed_at,inventory_locations(id,code,name,type),${reconciliationSelect}`;
 const allocationSelect = "dispatch_id,order_id,order_reference_number,client_name,product_variant_id,product_title,variant_label,quantity";
 
 export function createSupabaseChannelSalesRepository(url: string, secretKey: string): ChannelSalesRepository {
@@ -86,7 +95,7 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       if (!response.ok) throw new Error("Baguio client directory request failed.");
       const value: unknown = await response.json();
       if (!Array.isArray(value)) throw new Error("Baguio client directory returned invalid data.");
-      return value.map(readClient);
+      return value.map(readBaguioClient);
     },
     async listOnlineClients(limit, offset) {
       assertConfigured();
@@ -95,7 +104,7 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       if (!response.ok) throw new Error("Online customer directory request failed.");
       const value: unknown = await response.json();
       if (!Array.isArray(value)) throw new Error("Online customer directory returned invalid data.");
-      return value.map(readClient);
+      return value.map(readBaguioClient);
     },
     async listCustomers(limit, offset) {
       assertConfigured();
@@ -104,7 +113,7 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       if (!response.ok) throw new Error("Customer directory request failed.");
       const value: unknown = await response.json();
       if (!Array.isArray(value)) throw new Error("Customer directory returned invalid data.");
-      return value.map(readClient);
+      return value.map(readBaguioClient);
     },
     async createBaguioClient(input, actor) {
       assertConfigured();
@@ -119,7 +128,7 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       const saved = await fetch(`${url}/rest/v1/customers?select=id,reference_number,business_name,first_name,last_name,default_address,default_shipping_address,phone,email,contact_person,is_active,created_at&id=eq.${encodeURIComponent(id)}`, { headers: requestHeaders });
       const value: unknown = await saved.json();
       if (!saved.ok || !Array.isArray(value) || !value[0]) throw new Error("Baguio client directory returned invalid data.");
-      return readClient(value[0]);
+      return readBaguioClient(value[0]);
     },
     async createBaguioSale(input, actor) {
       assertConfigured();
@@ -192,6 +201,14 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       if (typeof changed !== "boolean") throw new Error("Channel sales storage returned invalid data.");
       return changed;
     },
+    async completeDriverDelivery(id, proof, actor) {
+      assertConfigured();
+      return completeDriverDelivery(url, secretKey, id, proof, actor);
+    },
+    async reconcileDriverDispatch(id, input, actor) {
+      assertConfigured();
+      return reconcileAssignedDriverDispatch(url, secretKey, id, input, actor);
+    },
   };
 }
 
@@ -205,7 +222,12 @@ function readSale(value: unknown): BaguioSale {
     clientName: readString(value.client_name), clientAddress: readString(value.client_address), clientPhone: readString(value.client_phone), customerId: readString(value.customer_id), dispatchId: readString(value.dispatch_id), addedAfterDeparture: readBoolean(value.added_after_departure), revisionCount: readArray(value.channel_sale_revisions).length,
     deliveryNotes: readString(value.delivery_notes), van: readLocation(value.inventory_locations), total: readNumber(value.total), createdAt: readString(value.created_at),
     deliveryOrder: { number: readString(deliveryOrder.document_number), status: readDeliveryOrderStatus(deliveryOrder.status), preparedByName: readString(deliveryOrder.prepared_by_name) },
-    deliveryReceipt: { number: readString(deliveryReceipt.document_number), status: readDeliveryReceiptStatus(deliveryReceipt.status), clientAcknowledgedAt: readNullableString(deliveryReceipt.client_acknowledged_at) },
+    deliveryReceipt: {
+      number: readString(deliveryReceipt.document_number),
+      status: readDeliveryReceiptStatus(deliveryReceipt.status),
+      clientAcknowledgedAt: readNullableString(deliveryReceipt.client_acknowledged_at),
+      proof: readSavedDriverDeliveryProof(deliveryReceipt),
+    },
     items: items.map((item) => ({ productVariantId: readString(item.product_variant_id), productTitle: readString(item.product_title), variantLabel: readString(item.variant_label), quantity: readNumber(item.quantity), unitPrice: readNumber(item.unit_price), lineTotal: readNumber(item.line_total) })),
   };
 }
@@ -224,33 +246,8 @@ function readDispatch(value: unknown, sales: BaguioSale[], allocations: unknown[
       orderId: readString(row.order_id), orderReferenceNumber: readString(row.order_reference_number), clientName: readString(row.client_name),
       productVariantId: readString(row.product_variant_id), productTitle: readString(row.product_title), variantLabel: readString(row.variant_label), quantity: readNumber(row.quantity),
     })),
+    reconciliation: readDispatchReconciliation(value),
   };
-}
-
-function readClient(value: unknown): BaguioClient {
-  if (!isRecord(value)) throw new Error("Baguio client directory returned invalid data.");
-  return {
-    id: readString(value.id), referenceNumber: readString(value.reference_number), name: readCustomerName(value),
-    address: readString(value.default_address), structuredAddress: readAddress(value.default_shipping_address),
-    phone: readString(value.phone), email: readNullableString(value.email) ?? "",
-    contactPerson: readString(value.contact_person), isActive: readBoolean(value.is_active), createdAt: readString(value.created_at),
-  };
-}
-
-function readAddress(value: unknown): BaguioClient["structuredAddress"] {
-  if (value === null) return null;
-  if (!isRecord(value)) throw new Error("Customer directory returned invalid address data.");
-  if (value.country !== "Philippines") throw new Error("Customer directory returned invalid address data.");
-  return {
-    street: readString(value.street), region: readString(value.region), province: readString(value.province),
-    locality: readString(value.locality), district: readString(value.district), barangay: readString(value.barangay),
-    postalCode: readString(value.postalCode), country: "Philippines",
-  };
-}
-
-function readCustomerName(value: Record<string, unknown>): string {
-  const businessName = readNullableString(value.business_name);
-  return businessName || `${readString(value.first_name)} ${readString(value.last_name)}`.trim();
 }
 
 function readLocation(value: unknown): InventoryLocation {

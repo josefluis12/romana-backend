@@ -71,7 +71,7 @@ export function BaguioOrdersByDispatch({ dispatches }: { dispatches: BaguioDispa
         !searchTerm ? <FilteredEmptyState filter={filter} /> :
         <div className="empty-state mt-6"><PackageOpen /><h2>No matching results</h2><p>Try a different dispatch, order, customer, product, or status.</p></div>
       ) : (
-        <div className="mt-6 grid gap-6">
+        <div className="mt-4 grid gap-3">
           {visibleDispatches.map((dispatch) => (
             <DispatchOrderGroup dispatch={dispatch} key={dispatch.id} />
           ))}
@@ -97,40 +97,54 @@ function FilteredEmptyState({ filter }: { filter: DispatchFilter }) {
 function DispatchOrderGroup({ dispatch }: { dispatch: BaguioDispatch }) {
   const total = dispatch.orders.reduce((sum, order) => sum + order.total, 0);
   return (
-    <section className="min-w-0 border border-[var(--line)] bg-white">
-      <header className="flex flex-wrap items-center justify-between gap-4 bg-[var(--paper)] p-5">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-4">
-          <span className="min-w-0">
-            <span className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold uppercase text-[var(--red)]">{dispatch.referenceNumber}</span>
-              <Status value={dispatch.status} />
-            </span>
-            <span className="mt-2 flex items-center gap-2 text-lg font-bold"><Truck className="size-4 shrink-0" />{dispatch.van.name}</span>
-            <span className="mt-1 block text-xs text-[var(--muted)]">Driver: {dispatch.driver?.name || "Unassigned"}</span>
-            <span className="mt-1 block text-xs text-[var(--muted)]">Created {date.format(new Date(dispatch.createdAt))}</span>
-          </span>
-          <span className="text-right text-sm font-bold">{dispatch.orders.length} order{dispatch.orders.length === 1 ? "" : "s"} · {peso.format(total)}</span>
-        </div>
-        <a className="flex shrink-0 items-center gap-1 text-sm font-bold text-[var(--red)] no-underline hover:underline" href={`#baguio-sales/dispatches/${dispatch.id}`}>View dispatch<ChevronRight className="size-4" /></a>
-      </header>
-      <details className="group border-t border-[var(--line)]">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--red)] [&::-webkit-details-marker]:hidden">
-          <span>{dispatch.orders.length ? `Show ${dispatch.orders.length} order${dispatch.orders.length === 1 ? "" : "s"}` : "No orders assigned yet"}</span>
-          <ChevronDown className="size-5 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" aria-hidden="true" />
+    <section className="min-w-0 overflow-hidden border border-[var(--line)] bg-white">
+      <details className="group overflow-x-auto">
+        <summary className="grid min-w-[820px] cursor-pointer list-none grid-cols-[20px_105px_100px_minmax(120px,1fr)_minmax(120px,1fr)_180px_70px_110px] items-center gap-3 bg-[var(--paper)] px-3 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--red)] [&::-webkit-details-marker]:hidden">
+          <ChevronDown className="size-4 text-[var(--muted)] transition-transform group-open:rotate-180" aria-hidden="true" />
+          <strong className="truncate uppercase text-[var(--red)]" title={dispatch.referenceNumber}>{dispatch.referenceNumber}</strong>
+          <Status value={dispatch.status} />
+          <span className="flex min-w-0 items-center gap-2 font-bold" title={dispatch.van.name}><Truck className="size-4 shrink-0" /><span className="truncate">{dispatch.van.name}</span></span>
+          <span className="truncate text-[var(--muted)]" title={dispatch.driver?.name || "Unassigned"}>Driver: {dispatch.driver?.name || "Unassigned"}</span>
+          <span className="whitespace-nowrap text-[var(--muted)]">Created {date.format(new Date(dispatch.createdAt))}</span>
+          <span className="whitespace-nowrap text-right font-bold">{dispatch.orders.length} order{dispatch.orders.length === 1 ? "" : "s"}</span>
+          <strong className="whitespace-nowrap text-right">{peso.format(total)}</strong>
         </summary>
         <div className="border-t border-[var(--line)]">
+          <div className="flex justify-end border-b border-[var(--line)] px-3 py-2">
+            <a className="flex items-center gap-1 text-xs font-bold text-[var(--red)] no-underline hover:underline" href={`#baguio-sales/dispatches/${dispatch.id}`}>View dispatch<ChevronRight className="size-4" /></a>
+          </div>
           {!dispatch.orders.length ? (
-            <div className="flex items-center gap-3 p-5 text-sm text-[var(--muted)]"><PackageOpen className="size-5" />No orders assigned yet.</div>
+            <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--muted)]"><PackageOpen className="size-4" />No orders assigned yet.</div>
           ) : (
-            <div className="grid gap-3 p-4 sm:p-5">
-              {dispatch.orders.map((order) => (
-                <article className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border border-[var(--line)] p-4 sm:grid-cols-[minmax(160px,1fr)_minmax(140px,.8fr)_120px_auto]" key={order.id}>
-                  <span><strong className="block">{order.referenceNumber}</strong><small className="text-[var(--muted)]">{order.clientName}</small></span>
-                  <span className="col-start-1 row-start-2 text-sm sm:col-auto sm:row-auto">{order.items.length} product line{order.items.length === 1 ? "" : "s"}</span>
-                  <span className="col-start-1 row-start-3 sm:col-auto sm:row-auto"><strong className="block text-sm">{peso.format(order.total)}</strong><small className="text-[var(--red)]">{getBaguioSaleStatusLabel(order.status)}</small></span>
-                  <a className="col-start-2 row-span-3 row-start-1 flex items-center gap-1 text-sm font-bold text-[var(--red)] no-underline hover:underline sm:col-auto sm:row-auto" href={`#baguio-sales/${order.id}`}>View order<ChevronRight className="size-4" /></a>
-                </article>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+                <thead className="bg-[var(--paper)] text-[var(--muted)]">
+                  <tr>
+                    <th className="px-3 py-2 font-bold">Order</th>
+                    <th className="px-3 py-2 font-bold">Customer</th>
+                    <th className="px-3 py-2 text-right font-bold">Products</th>
+                    <th className="px-3 py-2 text-right font-bold">Total</th>
+                    <th className="px-3 py-2 font-bold">Status</th>
+                    <th className="px-3 py-2"><span className="sr-only">Action</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dispatch.orders.map((order) => (
+                    <tr className="border-t border-[var(--line)]" key={order.id}>
+                      <td className="whitespace-nowrap px-3 py-2 font-bold">{order.referenceNumber}</td>
+                      <td className="max-w-56 truncate whitespace-nowrap px-3 py-2" title={order.clientName}>{order.clientName}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right">{order.items.length} line{order.items.length === 1 ? "" : "s"}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right font-bold">{peso.format(order.total)}</td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold uppercase leading-none ${statusTone(order.status)}`}>
+                          {getBaguioSaleStatusLabel(order.status)}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right"><a className="inline-flex items-center gap-1 font-bold text-[var(--red)] no-underline hover:underline" href={`#baguio-sales/${order.id}`}>View<ChevronRight className="size-3" /></a></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -140,5 +154,14 @@ function DispatchOrderGroup({ dispatch }: { dispatch: BaguioDispatch }) {
 }
 
 function Status({ value }: { value: BaguioDispatch["status"] }) {
-  return <span className="inline-flex rounded-full bg-[#f7e5e5] px-3 py-2 text-xs font-bold uppercase text-[var(--red)]">{value.replaceAll("_", " ")}</span>;
+  return <span className={`inline-flex w-max rounded-full px-2 py-1 text-[10px] font-bold uppercase leading-none ${statusTone(value)}`}>{value.replaceAll("_", " ")}</span>;
+}
+
+function statusTone(status: string): string {
+  if (["completed", "delivered", "successful"].includes(status)) return "bg-emerald-100 text-emerald-700";
+  if (status === "in_transit") return "bg-blue-100 text-blue-700";
+  if (["approved", "loaded"].includes(status)) return "bg-sky-100 text-sky-700";
+  if (["preparing", "pending_approval"].includes(status)) return "bg-amber-100 text-amber-800";
+  if (status === "cancelled") return "bg-red-100 text-red-700";
+  return "bg-slate-100 text-slate-700";
 }

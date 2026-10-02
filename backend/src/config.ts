@@ -30,6 +30,7 @@ export const config = {
   isProduction,
   frontendOrigin: (process.env.FRONTEND_ORIGIN || "http://localhost:5173").trim(),
   storefrontOrigin: (process.env.STOREFRONT_ORIGIN || "http://localhost:4321").trim(),
+  driverOrigin: (process.env.DRIVER_ORIGIN || "http://localhost:8081").trim(),
   supabaseUrl,
   supabaseKey,
   supabaseSecretKey: (process.env.SUPABASE_SECRET_KEY || "").trim(),

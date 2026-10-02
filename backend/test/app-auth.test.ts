@@ -4,6 +4,7 @@ import test from "node:test";
 import type { Session, User } from "@supabase/supabase-js";
 import { createApp } from "../src/app.js";
 import type { AuthService } from "../src/supabase-auth.js";
+import { config } from "../src/config.js";
 
 const authenticatedUser = { email: "staff@example.com", user_metadata: { full_name: "Maria Santos" } } as User;
 const authenticatedSession = {
@@ -60,4 +61,24 @@ test("rejects a dispatch driver from the admin portal login", async (context) =>
   assert.equal(response.status, 403);
   assert.deepEqual(await response.json(), { error: "Use the driver app to sign in." });
   assert.doesNotMatch(response.headers.get("set-cookie") || "", /romana_access_token=/);
+});
+
+test("allows bearer-authenticated requests from the configured driver web origin", async (context) => {
+  const server = createApp({ auth: createAuthenticatedService() }).listen(0, "127.0.0.1");
+  context.after(() => server.close());
+  await new Promise<void>((resolve) => server.once("listening", resolve));
+
+  const port = (server.address() as AddressInfo).port;
+  const response = await fetch(`http://127.0.0.1:${port}/api/driver/dispatches`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: config.driverOrigin,
+      "Access-Control-Request-Method": "GET",
+      "Access-Control-Request-Headers": "authorization",
+    },
+  });
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("access-control-allow-origin"), config.driverOrigin);
+  assert.match(response.headers.get("access-control-allow-headers") || "", /authorization/i);
 });

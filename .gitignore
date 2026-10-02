@@ -3,6 +3,7 @@ backend/node_modules/
 frontend/node_modules/
 backend/.env
 frontend/.env
+driver/.env
 backend/dist/
 frontend/dist/
 backend/romana-backend.zip
@@ -10,3 +11,4 @@ backend/romana-backend.zip
 .DS_Store
 npm-debug.log*
 .env.example
+!driver/.env.example

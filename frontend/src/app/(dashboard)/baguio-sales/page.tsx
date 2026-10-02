@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { advanceBaguioDispatch, advanceBaguioSale, createBaguioDispatch, createBaguioSale, listBaguioClients, listBaguioDispatches, listBaguioSales, listDispatchDrivers, listVehicles, updateBaguioSale } from "../../../services/channel-sales";
 import { listProducts } from "../../../services/products";
 import type { BaguioClient, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, InventoryLocation } from "../../../types/channel-sale";
@@ -22,8 +22,15 @@ export function BaguioSalesPage({ csrfToken, preparedByName }: { csrfToken: stri
   const [selectedDispatchId, setSelectedDispatchId] = useState(() => readSelectedBaguioDispatchId(window.location.hash));
   const [subview, setSubview] = useState(() => readBaguioSalesSubview(window.location.hash));
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const refreshOrders = useCallback(async () => {
+    const [nextSales, nextDispatches] = await Promise.all([listBaguioSales(), listBaguioDispatches()]);
+    setSales((current) => sameData(current, nextSales) ? current : nextSales);
+    setDispatches((current) => sameData(current, nextDispatches) ? current : nextDispatches);
+  }, []);
 
   async function load() {
     setLoading(true); setError("");
@@ -34,6 +41,30 @@ export function BaguioSalesPage({ csrfToken, preparedByName }: { csrfToken: stri
   }
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let refreshInProgress = false;
+    async function syncExternalChanges() {
+      if (refreshInProgress || document.visibilityState !== "visible") return;
+      refreshInProgress = true;
+      try {
+        await refreshOrders();
+        setError("");
+      } catch (cause) {
+        setError(messageFor(cause));
+      } finally {
+        refreshInProgress = false;
+      }
+    }
+    const handleVisibility = () => { if (document.visibilityState === "visible") void syncExternalChanges(); };
+    const interval = window.setInterval(() => void syncExternalChanges(), 5_000);
+    window.addEventListener("focus", syncExternalChanges);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", syncExternalChanges);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refreshOrders]);
   useEffect(() => {
     function syncHash() { setSelectedId(readSelectedBaguioSaleId(window.location.hash)); setSelectedDispatchId(readSelectedBaguioDispatchId(window.location.hash)); setSubview(readBaguioSalesSubview(window.location.hash)); }
     window.addEventListener("hashchange", syncHash);
@@ -65,15 +96,16 @@ export function BaguioSalesPage({ csrfToken, preparedByName }: { csrfToken: stri
     try { await advanceBaguioDispatch(id, action, csrfToken); const [nextSales, nextDispatches] = await Promise.all([listBaguioSales(), listBaguioDispatches()]); setSales(nextSales); setDispatches(nextDispatches); }
     catch (cause) { setError(messageFor(cause)); } finally { setSubmitting(false); }
   }
-  async function refreshOrders() {
-    const [nextSales, nextDispatches] = await Promise.all([listBaguioSales(), listBaguioDispatches()]);
-    setSales(nextSales); setDispatches(nextDispatches);
+  async function refreshStatus() {
+    setRefreshing(true); setError("");
+    try { await refreshOrders(); }
+    catch (cause) { setError(messageFor(cause)); }
+    finally { setRefreshing(false); }
   }
-
   if (loading) return <div className="catalog-status" role="status">Loading Baguio sales…</div>;
   const selected = sales.find((sale) => sale.id === selectedId);
   const selectedDispatch = dispatches.find((dispatch) => dispatch.id === selectedDispatchId);
-  if (selected) return <><ErrorMessage value={error} /><BaguioSaleDetails sale={selected} products={products} updating={submitting} onAdvance={(action) => advanceOrder(selected.id, action)} onUpdate={(input) => updateOrder(selected.id, input)} /></>;
+  if (selected) return <><ErrorMessage value={error} /><BaguioSaleDetails sale={selected} products={products} refreshing={refreshing} updating={submitting} onAdvance={(action) => advanceOrder(selected.id, action)} onRefresh={refreshStatus} onUpdate={(input) => updateOrder(selected.id, input)} /></>;
   if (selectedDispatch) return <><ErrorMessage value={error} /><BaguioDispatchDetails dispatch={selectedDispatch} updating={submitting} onAdvance={advanceDispatch} /></>;
   if (subview === "new-order") return <><ErrorMessage value={error} /><BaguioSaleForm products={products.filter((product) => product.isActive)} dispatches={dispatches} clients={clients} preparedByName={preparedByName} submitting={submitting} onCancel={returnToSales} onSubmit={createOrder} /></>;
   if (subview === "new-dispatch") return <><ErrorMessage value={error} /><BaguioDispatchForm expectedReference={getExpectedDispatchReference(dispatches)} vehicles={vehicles} drivers={drivers} submitting={submitting} onCancel={returnToSales} onSubmit={createDispatch} /></>;
@@ -100,3 +132,4 @@ function returnToSales() { window.location.hash = "baguio-sales"; }
 
 function ErrorMessage({ value }: { value: string }) { return value ? <div className="alert" role="alert">{value}</div> : null; }
 function messageFor(cause: unknown): string { return cause instanceof Error ? cause.message : "The Baguio sales workspace is unavailable."; }
+function sameData<T>(current: T, next: T): boolean { return JSON.stringify(current) === JSON.stringify(next); }

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import type { AddressInfo } from "node:net";
 import test from "node:test";
 import type { Session, User } from "@supabase/supabase-js";
 import { createApp } from "../src/app.js";
@@ -8,6 +7,8 @@ import type { AuthService } from "../src/supabase-auth.js";
 import type { BaguioClient, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, InventoryLocation } from "../src/types/channel-sales.js";
 import type { SystemUserService } from "../src/services/system-users.js";
 import type { SystemUser } from "../src/types/system-user.js";
+import { structuredAddress } from "./channel-sales.fixtures.js";
+import { withTestServer } from "./test-server.js";
 
 const user = { id: "11111111-1111-4111-8111-111111111111", email: "staff@example.com", user_metadata: { full_name: "Maria Santos" } } as User;
 const driverUser = { id: "55555555-5555-4555-8555-555555555555", email: "driver@example.com", app_metadata: { role: "dispatch_driver" }, user_metadata: { first_name: "Demo", middle_name: "Sample", last_name: "Driver" } } as User;
@@ -15,16 +16,6 @@ const driver: DispatchDriver = { userId: driverUser.id, name: "Demo Sample Drive
 const actor = { userId: user.id, email: user.email, name: "Maria Santos" };
 const session = { access_token: "access-token", refresh_token: "refresh-token", expires_in: 3600, user } as Session;
 const van: InventoryLocation = { id: "22222222-2222-4222-8222-222222222222", code: "baguio-van-1", name: "Baguio Van 1", type: "vehicle" };
-const structuredAddress = {
-  street: "Session Road",
-  region: "Cordillera Administrative Region (CAR)",
-  province: "Benguet",
-  locality: "Baguio City",
-  district: "",
-  barangay: "Session Road Area",
-  postalCode: "2600",
-  country: "Philippines" as const,
-};
 const client: BaguioClient = { id: "66666666-6666-4666-8666-666666666666", referenceNumber: "BGC-000001", name: "Baguio Market", address: "Session Road, Session Road Area, Baguio City, Benguet, Cordillera Administrative Region (CAR), 2600, Philippines", structuredAddress, phone: "09171234567", email: "buyer@example.com", contactPerson: "Ana Cruz", isActive: true, createdAt: "2026-09-28T00:00:00.000Z" };
 const sale: BaguioSale = {
   id: "33333333-3333-4333-8333-333333333333",
@@ -42,7 +33,7 @@ const sale: BaguioSale = {
   total: 640,
   createdAt: "2026-09-28T00:00:00.000Z",
   deliveryOrder: { number: "DOF-000001", status: "draft", preparedByName: "Maria Santos" },
-  deliveryReceipt: { number: "DR-000001", status: "pending", clientAcknowledgedAt: null },
+  deliveryReceipt: { number: "DR-000001", status: "pending", clientAcknowledgedAt: null, proof: null },
   items: [{ productVariantId: "44444444-4444-4444-8444-444444444444", productTitle: "Cashew Butter", variantLabel: "250g", quantity: 2, unitPrice: 320, lineTotal: 640 }],
 };
 const input: BaguioSaleInput = {
@@ -51,7 +42,7 @@ const input: BaguioSaleInput = {
   deliveryNotes: sale.deliveryNotes,
   items: sale.items.map(({ productVariantId, quantity, unitPrice }) => ({ productVariantId, quantity, unitPrice })),
 };
-const dispatch: BaguioDispatch = { id: sale.dispatchId, referenceNumber: "DSP-000001", status: "preparing", vanLocationId: van.id, van, driver, notes: "Morning run", createdAt: sale.createdAt, departedAt: null, orders: [sale], originalAllocation: [] };
+const dispatch: BaguioDispatch = { id: sale.dispatchId, referenceNumber: "DSP-000001", status: "preparing", vanLocationId: van.id, van, driver, notes: "Morning run", createdAt: sale.createdAt, departedAt: null, orders: [sale], originalAllocation: [], reconciliation: null };
 
 const auth: AuthService = {
   isConfigured: true,
@@ -87,11 +78,14 @@ const repository: ChannelSalesRepository = {
     advanced = { id, action, actor };
     return allowAdvance;
   },
+  completeDriverDelivery: async () => allowAdvance,
+  reconcileDriverDispatch: async () => allowAdvance,
 };
 const systemUser: SystemUser = { ...driver, role: "dispatch_driver" };
 const systemUsers: SystemUserService = {
   list: async () => [systemUser],
   listDrivers: async () => [driver],
+  getProfile: async () => null,
   create: async (account) => ({
     userId: driver.userId,
     name: [account.firstName, account.middleName, account.lastName].filter(Boolean).join(" "),
@@ -100,16 +94,7 @@ const systemUsers: SystemUserService = {
   }),
 };
 
-async function withServer(run: (origin: string) => Promise<void>) {
-  const server = createApp({ auth, channelSales: repository, systemUsers }).listen(0, "127.0.0.1");
-  await new Promise<void>((resolve) => server.once("listening", resolve));
-  try {
-    await run(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-  } finally {
-    server.close();
-  }
-}
-
+const withServer = (run: (origin: string) => Promise<void>) => withTestServer(createApp({ auth, channelSales: repository, systemUsers }), run);
 const cookie = "romana_access_token=access-token; romana_csrf=csrf-token";
 
 test("lists Baguio sales and vehicle inventory locations", async () => {
@@ -139,7 +124,7 @@ test("creates and starts a dispatch that owns multiple orders", async () => {
   });
 });
 
-test("creates system users and restricts driver dispatches by authenticated user", async () => {
+test("creates system users and scopes dispatches to authenticated drivers", async () => {
   listedForDriver = undefined;
   await withServer(async (origin) => {
     const listedAccounts = await fetch(`${origin}/api/system-users`, { headers: { Cookie: cookie } });
@@ -167,10 +152,14 @@ test("creates system users and restricts driver dispatches by authenticated user
     assert.deepEqual(await assigned.json(), { dispatches: [dispatch] });
     assert.equal(listedForDriver, driver.userId);
 
+    const administratorDispatches = await fetch(`${origin}/api/driver/dispatches`, { headers: { Authorization: "Bearer access-token" } });
+    assert.equal(administratorDispatches.status, 403);
+
     const forbidden = await fetch(`${origin}/api/channel-sales/baguio`, { headers: { Authorization: "Bearer driver-token" } });
     assert.equal(forbidden.status, 403);
   });
 });
+
 
 test("lists and registers clients in the Baguio directory", async () => {
   await withServer(async (origin) => {

@@ -59,12 +59,34 @@ export interface BaguioSale {
     number: string;
     status: DeliveryReceiptStatus;
     clientAcknowledgedAt: string | null;
+    proof: SavedDriverDeliveryProof | null;
   };
   items: ChannelSaleItem[];
 }
 
 export type BaguioDispatchStatus = "preparing" | "in_transit" | "completed" | "cancelled";
 export type BaguioDispatchAction = "start" | "complete";
+
+export interface SignaturePoint {
+  x: number;
+  y: number;
+}
+
+export type PaymentMode = "cash" | "gcash" | "maya" | "bank_transfer" | "cheque";
+
+export interface DriverDeliveryProof {
+  signature: SignaturePoint[][];
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  paymentMode: PaymentMode;
+}
+
+export interface SavedDriverDeliveryProof extends Omit<DriverDeliveryProof, "paymentMode"> {
+  signedAt: string;
+  driverUserId: string;
+  paymentMode: PaymentMode | null;
+}
 
 export interface BaguioDispatchInput {
   vanLocationId: string;
@@ -88,6 +110,44 @@ export interface BaguioDispatch extends Omit<BaguioDispatchInput, "driverUserId"
   driver: DispatchDriver | null;
   orders: BaguioSale[];
   originalAllocation: BaguioAllocationEntry[];
+  reconciliation: DispatchReconciliation | null;
+}
+
+export type ReconciliationOrderOutcome = "delivered" | "failed";
+
+export interface DispatchReconciliationInput {
+  orders: Array<{
+    orderId: string;
+    outcome: ReconciliationOrderOutcome;
+    collectedAmount: number;
+    failureReason: string;
+  }>;
+  exceptions: Array<{
+    productVariantId: string;
+    damagedQuantity: number;
+    missingQuantity: number;
+    notes: string;
+  }>;
+  notes: string;
+}
+
+export interface DispatchReconciliation {
+  submittedAt: string;
+  totalCollected: number;
+  notes: string;
+  orders: DispatchReconciliationInput["orders"];
+  inventory: Array<{
+    productVariantId: string;
+    productTitle: string;
+    variantLabel: string;
+    allocatedQuantity: number;
+    deliveredQuantity: number;
+    returnedQuantity: number;
+    damagedQuantity: number;
+    missingQuantity: number;
+    remainingQuantity: number;
+    notes: string;
+  }>;
 }
 
 export interface BaguioAllocationEntry {

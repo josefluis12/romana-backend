@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { UserPlus, Users } from "lucide-react";
-import { createSystemUser, listSystemUsers } from "../../../services/system-users";
-import type { CreateSystemUserInput, SystemUser, SystemUserRole } from "../../../types/system-user";
+import { Eye, UserPlus, Users } from "lucide-react";
+import { createSystemUser, getSystemUserProfile, listSystemUsers } from "../../../services/system-users";
+import type { CreateSystemUserInput, SystemUser, SystemUserProfile, SystemUserRole } from "../../../types/system-user";
 import { SystemUserForm } from "./_components/SystemUserForm";
+import { SystemUserProfileDialog } from "./_components/SystemUserProfileDialog";
 
 export function SystemUsersPage({ csrfToken }: { csrfToken: string }) {
   const [users, setUsers] = useState<SystemUser[]>([]);
@@ -10,6 +11,10 @@ export function SystemUsersPage({ csrfToken }: { csrfToken: string }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
+  const [profile, setProfile] = useState<SystemUserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   useEffect(() => {
     listSystemUsers()
@@ -32,6 +37,20 @@ export function SystemUsersPage({ csrfToken }: { csrfToken: string }) {
     }
   }
 
+  async function viewProfile(user: SystemUser) {
+    setSelectedUser(user);
+    setProfile(null);
+    setProfileError("");
+    setProfileLoading(true);
+    try {
+      setProfile(await getSystemUserProfile(user.userId));
+    } catch (cause) {
+      setProfileError(messageFor(cause));
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
   if (loading) return <div className="catalog-status" role="status">Loading system users…</div>;
   if (showForm) return <><ErrorMessage value={error} /><SystemUserForm submitting={submitting} onCancel={() => setShowForm(false)} onSubmit={create} /></>;
 
@@ -48,19 +67,20 @@ export function SystemUsersPage({ csrfToken }: { csrfToken: string }) {
         <div className="mt-6 overflow-hidden border border-[var(--line)] bg-white">
           <div className="border-b border-[var(--line)] bg-[var(--paper)] px-5 py-3 text-xs font-bold uppercase text-[var(--muted)]">{users.length} user{users.length === 1 ? "" : "s"}</div>
           <div className="divide-y divide-[var(--line)]">
-            {users.map((user) => <UserRow user={user} key={user.userId} />)}
+            {users.map((user) => <UserRow user={user} key={user.userId} onView={() => void viewProfile(user)} />)}
           </div>
         </div>
       )}
+      {selectedUser ? <SystemUserProfileDialog summary={selectedUser} profile={profile} loading={profileLoading} error={profileError} onClose={() => setSelectedUser(null)} /> : null}
     </section>
   );
 }
 
-function UserRow({ user }: { user: SystemUser }) {
+function UserRow({ user, onView }: { user: SystemUser; onView: () => void }) {
   return (
     <article className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
       <div className="min-w-0"><strong className="block">{user.name}</strong><span className="mt-1 block truncate text-sm text-[var(--muted)]">{user.email}</span></div>
-      <span className="rounded-full bg-[#f7e5e5] px-3 py-2 text-xs font-bold uppercase text-[var(--red)]">{roleLabel(user.role)}</span>
+      <div className="flex items-center gap-3"><span className="rounded-full bg-[#f7e5e5] px-3 py-2 text-xs font-bold uppercase text-[var(--red)]">{roleLabel(user.role)}</span><button className="flex h-10 items-center gap-2 rounded border border-[#cbc7bd] bg-white px-3 text-xs font-bold text-[#4b4944] hover:border-[#9b978f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--red)]" type="button" onClick={onView}><Eye className="size-4" />View profile</button></div>
     </article>
   );
 }

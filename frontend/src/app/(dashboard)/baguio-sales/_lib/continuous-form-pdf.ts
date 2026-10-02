@@ -28,6 +28,8 @@ export interface BaguioPrintForm {
   preparedBy: string;
   secondSigner: string;
   secondSignerLabel: string;
+  digitalSignature: NonNullable<BaguioSale["deliveryReceipt"]["proof"]>["signature"] | null;
+  signedAt: string;
 }
 
 export function buildBaguioPrintForm(sale: BaguioSale, kind: BaguioDocumentKind): BaguioPrintForm {
@@ -60,6 +62,10 @@ export function buildBaguioPrintForm(sale: BaguioSale, kind: BaguioDocumentKind)
     preparedBy: sale.deliveryOrder.preparedByName,
     secondSigner: isDeliveryOrder ? "" : sale.clientName,
     secondSignerLabel: isDeliveryOrder ? "Approved by" : "Received by",
+    digitalSignature: isDeliveryOrder ? null : sale.deliveryReceipt.proof?.signature ?? null,
+    signedAt: isDeliveryOrder || !sale.deliveryReceipt.proof
+      ? ""
+      : createdAt.format(new Date(sale.deliveryReceipt.proof.signedAt)),
   };
 }
 
@@ -188,11 +194,33 @@ function drawFooter(document: jsPDF, form: BaguioPrintForm, isLastPage: boolean)
     document.text(isLastPage ? form.total : "CONTINUED", pageWidth - margin - 3, notesTop + 17, { align: "right" });
   }
   drawSignature(document, margin + 3, 260, 64, isLastPage ? form.preparedBy : "", "Prepared by");
-  drawSignature(document, margin + 78, 260, 64, isLastPage ? form.secondSigner : "", form.secondSignerLabel);
-  drawSignature(document, margin + 153, 260, contentWidth - 156, "", "Date / time");
+  if (isLastPage && form.digitalSignature) {
+    drawDigitalSignature(document, margin + 78, 241, 64, 16, form.digitalSignature);
+  }
+  drawSignature(document, margin + 78, 260, 64, isLastPage && !form.digitalSignature ? form.secondSigner : "", form.secondSignerLabel);
+  drawSignature(document, margin + 153, 260, contentWidth - 156, isLastPage ? form.signedAt : "", "Date / time");
   document.setFont("courier", "normal");
   document.setFontSize(6.5);
   document.text("PRINT AT 100% SCALE - 9.5 x 11 IN CONTINUOUS PAPER - DO NOT FIT TO PAGE", pageWidth / 2, 274, { align: "center" });
+}
+
+function drawDigitalSignature(
+  document: jsPDF,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  strokes: Array<Array<{ x: number; y: number }>>,
+): void {
+  document.setLineWidth(0.6);
+  strokes.forEach((stroke) => {
+    for (let index = 1; index < stroke.length; index += 1) {
+      const start = stroke[index - 1];
+      const end = stroke[index];
+      document.line(x + start.x * width, y + start.y * height, x + end.x * width, y + end.y * height);
+    }
+  });
+  document.setLineWidth(0.35);
 }
 
 function drawSignature(document: jsPDF, x: number, y: number, width: number, name: string, label: string): void {

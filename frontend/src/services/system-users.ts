@@ -1,5 +1,5 @@
 import { fetchWithCsrf } from "./products";
-import type { CreateSystemUserInput, SystemUser } from "../types/system-user";
+import type { CreateSystemUserInput, SystemUser, SystemUserProfile } from "../types/system-user";
 
 interface ErrorResponse { error?: string }
 
@@ -18,6 +18,13 @@ export async function createSystemUser(input: CreateSystemUserInput, csrfToken: 
   }, csrfToken);
   const result = await readJson<{ user?: SystemUser; error?: string }>(response);
   if (!response.ok || !result.user) throw new Error(result.error || "Unable to create the user account.");
+  return result.user;
+}
+
+export async function getSystemUserProfile(userId: string): Promise<SystemUserProfile> {
+  const response = await fetch(`/api/system-users/${encodeURIComponent(userId)}`, { credentials: "include" });
+  const result = await readJson<{ user?: SystemUserProfile; error?: string }>(response);
+  if (!response.ok || !result.user) throw new Error(result.error || "Unable to load the user profile.");
   return result.user;
 }
 

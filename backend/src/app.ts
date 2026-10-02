@@ -50,7 +50,7 @@ export function createApp({
   const checkoutLimiter = createAttemptLimiter({ limit: 10, windowMs: 60_000 });
 
   app.disable("x-powered-by");
-  app.use(cors({ origin: [config.frontendOrigin, config.storefrontOrigin], credentials: true }));
+  app.use(cors({ origin: [config.frontendOrigin, config.storefrontOrigin, config.driverOrigin], credentials: true }));
   app.use(express.json({ limit: "10kb" }));
   app.use((_request, response, next) => {
     response.set({
