@@ -20,6 +20,7 @@ export async function completeDriverDelivery(
       p_signed_longitude: proof.longitude,
       p_location_accuracy: proof.accuracy,
       p_payment_mode: proof.paymentMode,
+      p_collected_amount: proof.collectedAmount,
     }),
   });
   if (!response.ok) throw new Error("Driver delivery request failed.");

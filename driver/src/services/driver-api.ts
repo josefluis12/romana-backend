@@ -1,10 +1,63 @@
 import { parseDriverDispatches } from "./dispatch-parser";
-import type { DispatchReconciliationInput, DriverDeliveryProof, DriverDispatch } from "../types/dispatch";
+import type { DispatchReconciliationInput, DriverDeliveryProof, DriverDispatch, DriverNavigationRoute } from "../types/dispatch";
 
 export class DriverApiError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
   }
+}
+
+export async function startDriverTrip(
+  apiUrl: string,
+  accessToken: string,
+  dispatchId: string,
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/api/driver/dispatches/${encodeURIComponent(dispatchId)}/start`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    throw new DriverApiError("Unable to start the trip. Check your connection and try again.", 0);
+  }
+  if (!response.ok) {
+    const value: unknown = await response.json().catch(() => null);
+    const serverMessage = isRecord(value) && typeof value.error === "string" ? value.error : null;
+    throw new DriverApiError(serverMessage ?? "The trip could not be started.", response.status);
+  }
+}
+
+export async function fetchOptimizedDriverRoute(
+  apiUrl: string,
+  accessToken: string,
+  dispatchId: string,
+  origin: { latitude: number; longitude: number },
+): Promise<DriverNavigationRoute> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/api/driver/dispatches/${encodeURIComponent(dispatchId)}/route`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(origin),
+    });
+  } catch {
+    throw new DriverApiError("Unable to calculate the route. Check your connection and try again.", 0);
+  }
+  const value: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = isRecord(value) && typeof value.error === "string" ? value.error : "The best route could not be calculated.";
+    throw new DriverApiError(message, response.status);
+  }
+  if (!isRecord(value) || typeof value.googleMapsUrl !== "string" || !Array.isArray(value.optimizedOrderIds)
+    || !value.optimizedOrderIds.every((id) => typeof id === "string") || typeof value.omittedStopCount !== "number") {
+    throw new DriverApiError("The server returned an invalid route.", response.status);
+  }
+  return {
+    googleMapsUrl: value.googleMapsUrl,
+    optimizedOrderIds: value.optimizedOrderIds,
+    omittedStopCount: value.omittedStopCount,
+  };
 }
 
 export async function completeDriverDelivery(

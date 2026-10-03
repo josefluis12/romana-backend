@@ -1,4 +1,4 @@
-export type DriverDispatchStatus = "preparing" | "in_transit" | "completed" | "cancelled";
+export type DriverDispatchStatus = "preparing" | "ready_for_departure" | "in_transit" | "completed" | "cancelled";
 
 export interface DriverOrder {
   id: string;
@@ -31,6 +31,7 @@ export interface DriverDeliveryProof {
   longitude: number;
   accuracy: number;
   paymentMode: PaymentMode;
+  collectedAmount: number;
 }
 
 export interface DriverDispatch {
@@ -43,11 +44,16 @@ export interface DriverDispatch {
   orders: DriverOrder[];
 }
 
+export interface DriverNavigationRoute {
+  googleMapsUrl: string;
+  optimizedOrderIds: string[];
+  omittedStopCount: number;
+}
+
 export interface DispatchReconciliationInput {
   orders: {
     orderId: string;
     outcome: "delivered" | "failed";
-    collectedAmount: number;
     failureReason: string;
   }[];
   exceptions: {

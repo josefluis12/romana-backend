@@ -29,9 +29,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Romana Driver to record where a client signs for a delivery."
+          "locationWhenInUsePermission": "Allow Romana Driver to calculate the best delivery route and record where a client signs."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

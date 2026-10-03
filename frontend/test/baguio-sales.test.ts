@@ -9,6 +9,7 @@ import { buildBaguioPrintForm, createBaguioDocumentPdf, getBaguioDocumentFilenam
 import { matchesBaguioOrderSearch } from "../src/app/(dashboard)/baguio-sales/_lib/order-search.ts";
 import { fitSignatureToPreview, signaturePreviewSize } from "../src/app/(dashboard)/baguio-sales/_lib/signature-preview.ts";
 import { getBaguioSaleProgressStage, getBaguioSaleStatusLabel } from "../src/app/(dashboard)/baguio-sales/_lib/workflow.ts";
+import { formatTripElapsed } from "../src/app/(dashboard)/baguio-sales/_lib/trip-elapsed.ts";
 import type { BaguioDispatch, BaguioSale } from "../src/types/channel-sale.ts";
 
 test("reads a Baguio sale id from its detail URL", () => {
@@ -22,7 +23,7 @@ test("distinguishes dispatch detail URLs from order detail URLs", () => {
   assert.equal(readSelectedBaguioDispatchId("#baguio-sales/dispatches/dispatch-123"), "dispatch-123");
 });
 
-test("routes Baguio Sales sidebar actions without treating them as order ids", () => {
+test("routes Baguio Sales page actions without treating them as order ids", () => {
   assert.equal(readBaguioSalesSubview("#baguio-sales/new-order"), "new-order");
   assert.equal(readBaguioSalesSubview("#baguio-sales/new-dispatch"), "new-dispatch");
   assert.equal(readBaguioSalesSubview("#baguio-sales/drivers"), null);
@@ -32,6 +33,11 @@ test("routes Baguio Sales sidebar actions without treating them as order ids", (
 
 test("presents the initial database state as an order that has been created", () => {
   assert.equal(getBaguioSaleStatusLabel("draft"), "Order created");
+});
+
+test("formats the live trip timer from the recorded departure time", () => {
+  assert.equal(formatTripElapsed("2026-10-03T01:00:00.000Z", Date.parse("2026-10-03T03:04:05.000Z")), "02:04:05");
+  assert.equal(formatTripElapsed("invalid", Date.now()), "--:--:--");
 });
 
 test("groups detailed Baguio statuses into four progress stages", () => {
@@ -170,6 +176,7 @@ test("creates a continuous-paper delivery receipt PDF with totals and signers", 
     accuracy: 12,
     driverUserId: "driver-1",
     paymentMode: "cash",
+    collectedAmount: 640,
   };
   const form = buildBaguioPrintForm(order, "delivery-receipt");
   const pdf = createBaguioDocumentPdf(order, "delivery-receipt");
@@ -202,7 +209,7 @@ test("continues long delivery forms onto additional continuous sheets", async ()
 
 function makeOrder(id: string, referenceNumber: string, clientName: string, clientAddress: string, quantity: number): BaguioSale {
   return {
-    id, referenceNumber, clientName, clientAddress, clientPhone: "09170000000", customerId: `customer-${id}`,
+    id, referenceNumber, clientName, clientAddress, clientPhone: "09170000000", customerId: `customer-${id}`, customerAddressId: null,
     status: "in_transit" as const, dispatchId: "dispatch-1", addedAfterDeparture: false, revisionCount: 0,
     van: { id: "van-1", code: "VAN-1", name: "Baguio Van", type: "vehicle" as const }, total: quantity * 100,
     createdAt: "2026-09-29T00:00:00Z", deliveryNotes: "Call on arrival.",
@@ -215,6 +222,6 @@ function makeOrder(id: string, referenceNumber: string, clientName: string, clie
 function makeProof(signedAt: string, latitude: number, longitude: number) {
   return {
     signature: [[{ x: 0.1, y: 0.2 }, { x: 0.8, y: 0.7 }]],
-    signedAt, latitude, longitude, accuracy: 12, driverUserId: "driver-1", paymentMode: "cash" as const,
+    signedAt, latitude, longitude, accuracy: 12, driverUserId: "driver-1", paymentMode: "cash" as const, collectedAmount: 640,
   };
 }

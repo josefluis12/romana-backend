@@ -1,22 +1,25 @@
 import { useState, type FormEvent } from "react";
 import { Plus, UserRound } from "lucide-react";
-import type { BaguioClient, BaguioClientInput } from "../../../../types/channel-sale";
+import type { BaguioClient, BaguioClientInput, CustomerAddressInput } from "../../../../types/channel-sale";
 import { emptyPhilippineAddress, PhilippineAddressFields } from "./PhilippineAddressFields";
+import { CustomerCard } from "./CustomerCard";
 
 interface Props {
   customers: BaguioClient[];
   channelLabel: string;
   submitting?: boolean;
   onRegister?: (input: BaguioClientInput) => Promise<void>;
+  onAddAddress?: (customerId: string, input: CustomerAddressInput) => Promise<void>;
 }
 
-export function CustomerDirectory({ customers, channelLabel, submitting = false, onRegister }: Props) {
+export function CustomerDirectory({ customers, channelLabel, submitting = false, onRegister, onAddAddress }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [contactPerson, setContactPerson] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState(emptyPhilippineAddress);
+  const [addressCustomerId, setAddressCustomerId] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,7 +50,30 @@ export function CustomerDirectory({ customers, channelLabel, submitting = false,
       </div>
       <div className="mt-6 flex justify-end"><button className="primary-button compact-button" type="submit" disabled={submitting}>{submitting ? "Registering…" : "Register customer"}</button></div>
     </form>}
-    {!customers.length ? <div className="empty-state"><UserRound /><h2>No {channelLabel.toLowerCase()} customers</h2><p>{onRegister ? `Register the first ${channelLabel.toLowerCase()} customer here.` : "Website customers appear here after checkout."}</p></div> : <div className="mt-5 grid gap-4 md:grid-cols-2">{customers.map((customer) => <article className="border border-[var(--line)] bg-white p-5" key={customer.id}><div className="flex items-start justify-between gap-3"><div><small className="text-[var(--red)]">{customer.referenceNumber}</small><h3 className="mb-1 mt-1 text-lg">{customer.name}</h3></div><span className="rounded-full bg-[#edf5ed] px-2 py-1 text-xs font-bold text-[#356338]">{customer.isActive ? "Active" : "Inactive"}</span></div>{customer.contactPerson && <p className="mb-0 mt-3 text-sm"><strong>Contact:</strong> {customer.contactPerson}</p>}<p className="mb-0 mt-1 text-sm">{customer.phone}{customer.email ? ` · ${customer.email}` : ""}</p>{customer.address && <p className="mb-0 mt-3 text-sm text-[var(--muted)]">{customer.address}</p>}</article>)}</div>}
+    {!customers.length ? (
+      <div className="empty-state">
+        <UserRound />
+        <h2>No {channelLabel.toLowerCase()} customers</h2>
+        <p>{onRegister ? `Register the first ${channelLabel.toLowerCase()} customer here.` : "Website customers appear here after checkout."}</p>
+      </div>
+    ) : (
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        {customers.map((customer) => (
+          <CustomerCard
+            key={customer.id}
+            customer={customer}
+            addingAddress={addressCustomerId === customer.id}
+            submitting={submitting}
+            onStartAddress={onAddAddress ? () => setAddressCustomerId(customer.id) : undefined}
+            onCancelAddress={() => setAddressCustomerId("")}
+            onAddAddress={onAddAddress ? async (input) => {
+              await onAddAddress(customer.id, input);
+              setAddressCustomerId("");
+            } : undefined}
+          />
+        ))}
+      </div>
+    )}
   </section>;
 }
 

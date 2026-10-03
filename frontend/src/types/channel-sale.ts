@@ -10,6 +10,7 @@ export interface InventoryLocation {
 
 export interface BaguioSaleInput {
   customerId: string;
+  customerAddressId: string;
   dispatchId: string;
   deliveryNotes: string;
   items: Array<{ productVariantId: string; quantity: number; unitPrice: number }>;
@@ -20,13 +21,14 @@ export interface BaguioSaleUpdateInput {
   items: BaguioSaleInput["items"];
 }
 
-export interface BaguioSale extends Omit<BaguioSaleInput, "dispatchId" | "items"> {
+export interface BaguioSale extends Omit<BaguioSaleInput, "dispatchId" | "items" | "customerAddressId"> {
   id: string;
   referenceNumber: string;
   status: ChannelSaleStatus;
   clientName: string;
   clientAddress: string;
   clientPhone: string;
+  customerAddressId: string | null;
   dispatchId: string;
   addedAfterDeparture: boolean;
   revisionCount: number;
@@ -50,6 +52,7 @@ export interface BaguioSale extends Omit<BaguioSaleInput, "dispatchId" | "items"
       accuracy: number;
       driverUserId: string;
       paymentMode: "cash" | "gcash" | "maya" | "bank_transfer" | "cheque" | null;
+      collectedAmount: number | null;
     } | null;
   };
   items: Array<{
@@ -62,7 +65,7 @@ export interface BaguioSale extends Omit<BaguioSaleInput, "dispatchId" | "items"
   }>;
 }
 
-export type BaguioDispatchStatus = "preparing" | "in_transit" | "completed" | "cancelled";
+export type BaguioDispatchStatus = "preparing" | "ready_for_departure" | "in_transit" | "completed" | "cancelled";
 export type BaguioDispatchAction = "start" | "complete";
 
 export interface BaguioDispatchInput { vanLocationId: string; driverUserId: string; notes: string }
@@ -123,11 +126,23 @@ export interface BaguioClientInput {
   contactPerson: string;
 }
 
+export interface CustomerAddressInput {
+  label: string;
+  address: PhilippineAddress;
+}
+
+export interface CustomerAddress extends CustomerAddressInput {
+  id: string;
+  formattedAddress: string;
+  isDefault: boolean;
+}
+
 export interface BaguioClient extends Omit<BaguioClientInput, "address"> {
   id: string;
   referenceNumber: string;
   address: string;
   structuredAddress: PhilippineAddress | null;
+  addresses: CustomerAddress[];
   isActive: boolean;
   createdAt: string;
 }

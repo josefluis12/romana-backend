@@ -27,10 +27,13 @@ const proof: DriverDeliveryProof = {
   longitude: 120.596,
   accuracy: 8.5,
   paymentMode: "gcash",
+  collectedAmount: 640.5,
 };
 
 let completed: { id: string; proof: DriverDeliveryProof; actor: ChannelSaleActor } | null;
+let startedDispatch: { id: string; actor: ChannelSaleActor } | null;
 let completedDispatch: { id: string; input: DispatchReconciliationInput; actor: ChannelSaleActor } | null;
+let allowTripStart = true;
 let allowTripCompletion = true;
 
 function createRepository(): ChannelSalesRepository {
@@ -42,6 +45,7 @@ function createRepository(): ChannelSalesRepository {
     listOnlineClients: async () => [],
     listCustomers: async () => [],
     createBaguioClient: async () => { throw new Error("Not used"); },
+    createCustomerAddress: async () => { throw new Error("Not used"); },
     createBaguioSale: async () => "",
     updateBaguioSale: async () => false,
     createBaguioDispatch: async () => "",
@@ -51,12 +55,49 @@ function createRepository(): ChannelSalesRepository {
       completed = { id, proof: nextProof, actor };
       return true;
     },
+    startDriverTrip: async (id, actor) => {
+      startedDispatch = { id, actor };
+      return allowTripStart;
+    },
     reconcileDriverDispatch: async (id, input, actor) => {
       completedDispatch = { id, input, actor };
       return allowTripCompletion;
     },
   };
 }
+
+test("assigned driver starts a released trip", async () => {
+  startedDispatch = null;
+  allowTripStart = true;
+  await withTestServer(createTestApp(), async (origin) => {
+    const response = await fetch(`${origin}/api/driver/dispatches/${dispatchId}/start`, {
+      method: "POST",
+      headers: { Authorization: "Bearer driver-token" },
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { status: "in_transit" });
+    assert.deepEqual(startedDispatch, {
+      id: dispatchId,
+      actor: { userId: driver.id, email: driver.email, name: "Demo Driver" },
+    });
+  });
+});
+
+test("driver cannot start an unavailable trip", async () => {
+  allowTripStart = false;
+  await withTestServer(createTestApp(), async (origin) => {
+    const rejected = await fetch(`${origin}/api/driver/dispatches/${dispatchId}/start`, {
+      method: "POST",
+      headers: { Authorization: "Bearer driver-token" },
+    });
+    const forbidden = await fetch(`${origin}/api/driver/dispatches/${dispatchId}/start`, {
+      method: "POST",
+      headers: { Authorization: "Bearer admin-token" },
+    });
+    assert.equal(rejected.status, 409);
+    assert.equal(forbidden.status, 403);
+  });
+});
 
 function createTestApp() {
   const app = express();
@@ -92,7 +133,7 @@ test("delivery endpoint rejects invalid proof and non-driver users", async () =>
     const invalid = await fetch(`${origin}/api/driver/orders/${orderId}/deliver`, {
       method: "POST",
       headers: { Authorization: "Bearer driver-token", "Content-Type": "application/json" },
-      body: JSON.stringify({ signature: [], latitude: 16.4, longitude: 120.6, accuracy: 5, paymentMode: "cash" }),
+      body: JSON.stringify({ signature: [], latitude: 16.4, longitude: 120.6, accuracy: 5, paymentMode: "cash", collectedAmount: 640 }),
     });
     const forbidden = await fetch(`${origin}/api/driver/orders/${orderId}/deliver`, {
       method: "POST",
@@ -105,7 +146,7 @@ test("delivery endpoint rejects invalid proof and non-driver users", async () =>
 });
 
 const reconciliation: DispatchReconciliationInput = {
-  orders: [{ orderId, outcome: "failed", collectedAmount: 0, failureReason: "Customer unavailable" }],
+  orders: [{ orderId, outcome: "failed", failureReason: "Customer unavailable" }],
   exceptions: [],
   notes: "Returned to factory",
 };

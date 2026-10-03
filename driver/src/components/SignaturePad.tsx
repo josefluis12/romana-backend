@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { SignaturePoint } from "../types/dispatch";
-import { colors } from "../styles/theme";
+import { colors, fonts } from "../styles/theme";
 
 interface SignaturePadProps {
   strokes: SignaturePoint[][];
   onChange(strokes: SignaturePoint[][]): void;
+  onSigningChange?(isSigning: boolean): void;
 }
 
 const PAD_HEIGHT = 190;
 const MAX_POINTS = 400;
 
-export function SignaturePad({ strokes, onChange }: SignaturePadProps) {
+export function SignaturePad({ strokes, onChange, onSigningChange }: SignaturePadProps) {
   const [width, setWidth] = useState(1);
   const strokesRef = useRef(strokes);
   useEffect(() => {
@@ -33,6 +34,7 @@ export function SignaturePad({ strokes, onChange }: SignaturePadProps) {
   };
 
   const startStroke = (event: GestureResponderEvent) => {
+    onSigningChange?.(true);
     const pointCount = strokesRef.current.reduce((count, stroke) => count + stroke.length, 0);
     if (pointCount >= MAX_POINTS || strokesRef.current.length >= 20) return;
     const point = normalizePoint(event.nativeEvent.locationX, event.nativeEvent.locationY, width);
@@ -42,6 +44,7 @@ export function SignaturePad({ strokes, onChange }: SignaturePadProps) {
   };
 
   const finishStroke = () => {
+    onSigningChange?.(false);
     const current = strokesRef.current;
     if ((current[current.length - 1]?.length ?? 0) >= 2) return;
     const next = current.slice(0, -1);
@@ -54,17 +57,18 @@ export function SignaturePad({ strokes, onChange }: SignaturePadProps) {
   return (
     <View
       onLayout={handleLayout}
+      onMoveShouldSetResponderCapture={() => true}
       onMoveShouldSetResponder={() => true}
       onResponderGrant={startStroke}
       onResponderMove={(event) => appendPoint(event.nativeEvent.locationX, event.nativeEvent.locationY)}
       onResponderRelease={finishStroke}
       onResponderTerminate={finishStroke}
-      onResponderTerminationRequest={() => false}
+      onStartShouldSetResponderCapture={() => true}
       onStartShouldSetResponder={() => true}
       style={styles.pad}
     >
       {strokes.length === 0 && <Text style={styles.hint}>Sign inside this box</Text>}
-      <Svg height={PAD_HEIGHT} width="100%" viewBox={`0 0 ${width} ${PAD_HEIGHT}`}>
+      <Svg height={PAD_HEIGHT} style={styles.canvas} width="100%" viewBox={`0 0 ${width} ${PAD_HEIGHT}`}>
         {strokes.map((stroke, index) => (
           <Path
             d={stroke.map((point, pointIndex) => `${pointIndex === 0 ? "M" : "L"} ${point.x * width} ${point.y * PAD_HEIGHT}`).join(" ")}
@@ -89,6 +93,7 @@ function normalizePoint(x: number, y: number, width: number): SignaturePoint {
 }
 
 const styles = StyleSheet.create({
+  canvas: { pointerEvents: "none" },
   pad: {
     height: PAD_HEIGHT,
     overflow: "hidden",
@@ -97,6 +102,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
+    touchAction: "none",
   },
-  hint: { position: "absolute", alignSelf: "center", color: colors.textMuted, fontSize: 14 },
+  hint: { position: "absolute", alignSelf: "center", color: colors.textMuted, fontFamily: fonts.regular, fontSize: 14 },
 });

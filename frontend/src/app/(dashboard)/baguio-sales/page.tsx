@@ -5,6 +5,7 @@ import type { BaguioClient, BaguioDispatch, BaguioDispatchAction, BaguioDispatch
 import type { Product } from "../../../types/product";
 import { BaguioDispatchForm } from "./_components/BaguioDispatchForm";
 import { BaguioDispatchDetails } from "./_components/BaguioDispatchDetails";
+import { BaguioCreateMenu } from "./_components/BaguioCreateMenu";
 import { BaguioOrdersByDispatch } from "./_components/BaguioOrdersByDispatch";
 import { BaguioSaleDetails } from "./_components/BaguioSaleDetails";
 import { BaguioSaleForm } from "./_components/BaguioSaleForm";
@@ -114,13 +115,7 @@ export function BaguioSalesPage({ csrfToken, preparedByName }: { csrfToken: stri
     <section className="mt-9">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--line)] pb-5">
         <p className="m-0 text-sm text-[var(--muted)]">Factory-to-van dispatches, orders, documents, and delivery status</p>
-        <label className="grid gap-1 text-xs font-bold min-[801px]:hidden">Quick action
-          <select className="h-10 rounded border border-[var(--line)] bg-white px-3 text-sm" value="" onChange={(event) => { if (event.target.value) window.location.hash = event.target.value; }}>
-            <option value="">Choose…</option>
-            <option value="baguio-sales/new-order">New order</option>
-            <option value="baguio-sales/new-dispatch">New dispatch</option>
-          </select>
-        </label>
+        <BaguioCreateMenu />
       </div>
       <ErrorMessage value={error} />
       <BaguioOrdersByDispatch dispatches={dispatches} />

@@ -36,6 +36,7 @@ export const config = {
   supabaseSecretKey: (process.env.SUPABASE_SECRET_KEY || "").trim(),
   mayaApiUrl,
   mayaPublicKey: (process.env.MAYA_PUBLIC_KEY || (!isProduction && mayaApiUrl === "https://pg-sandbox.paymaya.com" ? mayaSharedSandboxKey : "")).trim(),
+  googleMapsApiKey: (process.env.GOOGLE_MAPS_API_KEY || "").trim(),
 };
 
 if (supabaseUrl && !isValidSupabaseUrl(supabaseUrl)) {

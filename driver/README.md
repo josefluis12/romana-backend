@@ -2,8 +2,10 @@
 
 Expo and React Native app for driver assignments and proof of delivery. Restricted
 driver accounts can sign in through Supabase Auth, review pending stops, capture the
-client's signature, and mark an assigned in-transit order as delivered. The app saves
-the device coordinates and accuracy with the signature and server-side delivery time.
+client's signature, record the amount and payment method collected from each client,
+and mark an assigned in-transit order as delivered. The app saves those payment details
+with the device coordinates, signature, and server-side delivery time. End-of-trip
+reconciliation handles failed stops and returned inventory without re-entering payments.
 
 ## Setup
 

@@ -21,6 +21,7 @@ test("sends the selected payment mode with the delivery proof", async () => {
         longitude: 120.596,
         accuracy: 8.5,
         paymentMode: "gcash",
+        collectedAmount: 640.5,
       },
       {
         userId: "55555555-5555-4555-8555-555555555555",
@@ -31,6 +32,7 @@ test("sends the selected payment mode with the delivery proof", async () => {
 
     assert.equal(changed, true);
     assert.equal((requestBody as Record<string, unknown>).p_payment_mode, "gcash");
+    assert.equal((requestBody as Record<string, unknown>).p_collected_amount, 640.5);
   } finally {
     globalThis.fetch = originalFetch;
   }

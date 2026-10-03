@@ -28,11 +28,10 @@ export function validateDispatchReconciliation(value: unknown): { input?: Dispat
 function readOrder(value: unknown): DispatchReconciliationInput["orders"][number] | null {
   if (!isRecord(value) || typeof value.orderId !== "string" || !isUuid(value.orderId)
     || typeof value.outcome !== "string" || !outcomes.has(value.outcome as ReconciliationOrderOutcome)) return null;
-  const collectedAmount = readQuantity(value.collectedAmount, 1_000_000_000, true);
   const failureReason = readText(value.failureReason, 500);
-  if (collectedAmount === null || failureReason === null) return null;
+  if (failureReason === null) return null;
   if (value.outcome === "failed" && !failureReason) return null;
-  return { orderId: value.orderId, outcome: value.outcome as ReconciliationOrderOutcome, collectedAmount, failureReason };
+  return { orderId: value.orderId, outcome: value.outcome as ReconciliationOrderOutcome, failureReason };
 }
 
 function readException(value: unknown): DispatchReconciliationInput["exceptions"][number] | null {
@@ -45,9 +44,9 @@ function readException(value: unknown): DispatchReconciliationInput["exceptions"
   return { productVariantId: value.productVariantId, damagedQuantity, missingQuantity, notes };
 }
 
-function readQuantity(value: unknown, maximum: number, allowDecimal = false): number | null {
+function readQuantity(value: unknown, maximum: number): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= maximum
-    && (allowDecimal || Number.isInteger(value)) ? value : null;
+    && Number.isInteger(value) ? value : null;
 }
 function readText(value: unknown, maximum: number): string | null {
   return typeof value === "string" && value.trim().length <= maximum ? value.trim() : null;

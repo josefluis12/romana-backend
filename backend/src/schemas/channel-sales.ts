@@ -1,4 +1,4 @@
-import type { BaguioClientInput, BaguioDispatchAction, BaguioDispatchInput, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput } from "../types/channel-sales.js";
+import type { BaguioClientInput, BaguioDispatchAction, BaguioDispatchInput, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, CustomerAddressInput } from "../types/channel-sales.js";
 import type { ShippingAddress } from "../types/order.js";
 
 interface ValidationResult {
@@ -10,6 +10,7 @@ export function validateBaguioSaleInput(value: unknown): ValidationResult {
   if (!isRecord(value)) return { error: "Enter the Baguio order details." };
   const deliveryNotes = readText(value.deliveryNotes, 500, true);
   if (typeof value.customerId !== "string" || !isUuid(value.customerId)) return { error: "Choose a registered Baguio customer." };
+  if (typeof value.customerAddressId !== "string" || !isUuid(value.customerAddressId)) return { error: "Choose a saved customer address." };
   if (deliveryNotes === null) return { error: "Delivery notes must be 500 characters or fewer." };
   if (typeof value.dispatchId !== "string" || !isUuid(value.dispatchId)) {
     return { error: "Choose an open dispatch." };
@@ -24,6 +25,7 @@ export function validateBaguioSaleInput(value: unknown): ValidationResult {
   return {
     sale: {
       customerId: value.customerId,
+      customerAddressId: value.customerAddressId,
       dispatchId: value.dispatchId,
       deliveryNotes,
       items: items.filter((item) => item !== null),
@@ -56,6 +58,15 @@ export function validateBaguioClientInput(value: unknown): { client?: BaguioClie
   if (email === null || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return { error: "Enter a valid email address." };
   if (contactPerson === null) return { error: "Contact person must be 120 characters or fewer." };
   return { client: { name, address, phone, email: email.toLowerCase(), contactPerson } };
+}
+
+export function validateCustomerAddressInput(value: unknown): { address?: CustomerAddressInput; error?: string } {
+  if (!isRecord(value)) return { error: "Enter the customer address." };
+  const label = readText(value.label, 80);
+  const address = readAddress(value.address);
+  if (!label) return { error: "Enter an address label." };
+  if (!address) return { error: "Enter a complete Philippine delivery address." };
+  return { address: { label, address } };
 }
 
 function readAddress(value: unknown): ShippingAddress | null {

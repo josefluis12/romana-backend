@@ -26,6 +26,8 @@ import { registerDispatchDriverRoutes } from "./routes/dispatch-drivers.js";
 import { createSupabaseSystemUserService, isDispatchDriver, type SystemUserService } from "./services/system-users.js";
 import { registerSystemUserRoutes } from "./routes/system-users.js";
 import { createSessionManager, type ResolvedSession } from "./session-manager.js";
+import { isUuid } from "./schemas/channel-sales.js";
+import { createGoogleDriverRoutingService, type DriverRoutingService } from "./services/driver-routing.js";
 interface AppDependencies {
   auth?: AuthService;
   products?: ProductRepository;
@@ -34,6 +36,7 @@ interface AppDependencies {
   orders?: OrderRepository;
   channelSales?: ChannelSalesRepository;
   systemUsers?: SystemUserService;
+  driverRouting?: DriverRoutingService;
 }
 
 export function createApp({
@@ -44,6 +47,7 @@ export function createApp({
   orders = createSupabaseOrderRepository(config.supabaseUrl, config.supabaseSecretKey),
   channelSales = createSupabaseChannelSalesRepository(config.supabaseUrl, config.supabaseSecretKey),
   systemUsers = createSupabaseSystemUserService(config.supabaseUrl, config.supabaseSecretKey),
+  driverRouting = createGoogleDriverRoutingService(config.googleMapsApiKey),
 }: AppDependencies = {}) {
   const app = express();
   const limiter = createAttemptLimiter();
@@ -173,7 +177,7 @@ export function createApp({
 
   registerOrderRoutes(app, orders, maya, resolveSession);
   registerChannelSalesRoutes(app, channelSales, resolveSession);
-  registerDispatchDriverRoutes(app, systemUsers, channelSales, resolveSession);
+  registerDispatchDriverRoutes(app, systemUsers, channelSales, driverRouting, resolveSession);
   registerSystemUserRoutes(app, systemUsers, resolveSession);
 
   app.post("/api/storefront/checkouts", async (request, response) => {
@@ -291,8 +295,4 @@ export function createApp({
 
 function isPayloadTooLarge(error: unknown): boolean {
   return error instanceof Error && "status" in error && error.status === 413;
-}
-
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

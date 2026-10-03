@@ -6,8 +6,9 @@ import { printBaguioDispatchLoadSheet } from "../_lib/print-document";
 import { getBaguioSaleStatusLabel } from "../_lib/workflow";
 import { DispatchLocationMap } from "./DispatchLocationMap";
 import { DispatchReconciliationReport } from "./DispatchReconciliationReport";
+import { TripElapsedTimer } from "./TripElapsedTimer";
 
-const progressSteps = ["Preparing", "In transit", "Completed"];
+const progressSteps = ["Preparing", "Ready for driver", "In transit", "Completed"];
 const pingDate = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" });
 type DispatchTab = "original" | "current" | "map" | "reconciliation";
 
@@ -40,11 +41,12 @@ export function BaguioDispatchDetails({ dispatch, updating, onAdvance }: {
             <p className="mb-1 mt-0 text-sm font-bold">Driver: {dispatch.driver?.name || "Unassigned"}</p>
             <p className="m-0 text-sm text-[var(--muted)]">{dispatch.orders.length} customer order{dispatch.orders.length === 1 ? "" : "s"}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center">
             <Status value={dispatch.status} />
-            <button className="secondary-button" type="button" disabled={!dispatch.orders.length} onClick={() => printBaguioDispatchLoadSheet(dispatch)}><Printer />Print driver load sheet</button>
-            {dispatch.status === "preparing" && <button className="primary-button compact-button" disabled={updating || !canStart} onClick={() => void onAdvance(dispatch.id, "start")}>Start dispatch</button>}
-            {dispatch.status === "in_transit" && <span className="text-xs font-bold text-[var(--muted)]">Awaiting driver reconciliation</span>}
+            <button className="secondary-button !w-full !px-3 justify-center sm:!w-auto" type="button" disabled={!dispatch.orders.length} onClick={() => printBaguioDispatchLoadSheet(dispatch)}><Printer />Print driver load sheet</button>
+            {dispatch.status === "preparing" && <button className="primary-button compact-button !w-full justify-center sm:!w-auto" disabled={updating || !canStart} onClick={() => void onAdvance(dispatch.id, "start")}>Start dispatch</button>}
+            {dispatch.status === "ready_for_departure" && <span className="text-xs font-bold text-[var(--muted)]">Waiting for driver to start trip</span>}
+            {dispatch.status === "in_transit" && <TripElapsedTimer departedAt={dispatch.departedAt} />}
           </div>
         </header>
         <DispatchProgress status={dispatch.status} />
@@ -57,10 +59,10 @@ export function BaguioDispatchDetails({ dispatch, updating, onAdvance }: {
         <div id="original-allocation-panel" role="tabpanel" aria-labelledby="original-allocation-tab" hidden={activeTab !== "original"}>
           <AllocationReport
             title="Pre-dispatch allocation"
-            description="Original order allocation captured when the dispatch entered transit."
+            description="Original order allocation captured when the driver starts the trip."
             entries={dispatch.originalAllocation}
             orders={dispatch.orders.filter((order) => !order.addedAfterDeparture)}
-            emptyMessage={dispatch.status === "preparing" ? "This report will be captured when the dispatch starts." : "No original allocation was recorded."}
+            emptyMessage={["preparing", "ready_for_departure"].includes(dispatch.status) ? "This report will be captured when the driver starts the trip." : "No original allocation was recorded."}
           />
         </div>
         <div id="current-allocation-panel" role="tabpanel" aria-labelledby="current-allocation-tab" hidden={activeTab !== "current"}>
@@ -142,7 +144,7 @@ function DispatchTabButton({ id, active, controls, onClick, children }: {
 }
 
 function DispatchProgress({ status }: { status: BaguioDispatch["status"] }) {
-  const activeIndex = status === "preparing" ? 0 : status === "in_transit" ? 1 : status === "completed" ? 2 : -1;
+  const activeIndex = status === "preparing" ? 0 : status === "ready_for_departure" ? 1 : status === "in_transit" ? 2 : status === "completed" ? 3 : -1;
   return (
     <section className="mt-6 border border-[var(--line)] p-5" aria-label="Dispatch progress">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -150,9 +152,9 @@ function DispatchProgress({ status }: { status: BaguioDispatch["status"] }) {
         <p className="m-0 text-xs capitalize text-[var(--muted)]">Current step: {status.replaceAll("_", " ")}</p>
       </div>
       {status === "cancelled" ? <p className="mt-4 border-l-2 border-[var(--red)] bg-[#fae9e8] p-3 text-sm text-[#83151a]">This dispatch was cancelled.</p> : (
-        <ol className="relative mt-6 grid grid-cols-3 p-0">
-          <span className="absolute top-4 h-0.5 bg-[var(--line)]" style={{ left: "16.666%", right: "16.666%" }} aria-hidden="true" />
-          <span className="absolute top-4 h-0.5 bg-[var(--red)] transition-[width]" style={{ left: "16.666%", width: activeIndex === 0 ? "0" : activeIndex === 1 ? "33.334%" : "66.668%" }} aria-hidden="true" />
+        <ol className="relative mt-6 grid grid-cols-4 p-0">
+          <span className="absolute top-4 h-0.5 bg-[var(--line)]" style={{ left: "12.5%", right: "12.5%" }} aria-hidden="true" />
+          <span className="absolute top-4 h-0.5 bg-[var(--red)] transition-[width]" style={{ left: "12.5%", width: `${Math.max(0, activeIndex) * 25}%` }} aria-hidden="true" />
           {progressSteps.map((step, index) => {
             const complete = status === "completed" || index < activeIndex;
             const current = index === activeIndex && status !== "completed";
@@ -234,4 +236,4 @@ function OrderTags({ order }: { order: BaguioDispatch["orders"][number] }) {
 
 function Tag({ value }: { value: string }) { return <span className="rounded-full bg-[#fff0c7] px-2 py-1 text-[10px] font-bold uppercase text-[#785000]">{value}</span>; }
 
-function Status({ value }: { value: BaguioDispatch["status"] }) { return <span className="rounded-full bg-[#f7e5e5] px-3 py-2 text-xs font-bold uppercase text-[var(--red)]">{value.replaceAll("_", " ")}</span>; }
+function Status({ value }: { value: BaguioDispatch["status"] }) { return <span className="self-start rounded-full bg-[#f7e5e5] px-3 py-2 text-xs font-bold uppercase text-[var(--red)] sm:self-auto">{value.replaceAll("_", " ")}</span>; }

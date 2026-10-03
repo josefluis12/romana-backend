@@ -11,6 +11,7 @@ test("reads saved signature strokes and delivery coordinates", () => {
     location_accuracy: 12,
     signed_by_driver_user_id: "55555555-5555-4555-8555-555555555555",
     payment_mode: "bank_transfer",
+    collected_amount: 640.5,
   });
   assert.deepEqual(proof, {
     signature: [[{ x: 0.1, y: 0.2 }, { x: 0.8, y: 0.7 }]],
@@ -20,6 +21,7 @@ test("reads saved signature strokes and delivery coordinates", () => {
     accuracy: 12,
     driverUserId: "55555555-5555-4555-8555-555555555555",
     paymentMode: "bank_transfer",
+    collectedAmount: 640.5,
   });
 });
 
@@ -37,6 +39,7 @@ test("supports signed receipts created before payment mode capture", () => {
     signed_by_driver_user_id: "55555555-5555-4555-8555-555555555555",
   });
   assert.equal(proof?.paymentMode, null);
+  assert.equal(proof?.collectedAmount, null);
 });
 
 test("rejects malformed saved signatures", () => {

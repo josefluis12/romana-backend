@@ -2,8 +2,6 @@ import {
   ChartNoAxesCombined,
   MapPinned,
   Package,
-  PackagePlus,
-  Route,
   ShoppingBag,
   Tags,
   UserCog,
@@ -23,7 +21,6 @@ export function SidebarNavigation({ activeTab }: { activeTab: DashboardTab }) {
       <NavGroup label="Operations">
         <NavItem activeTab={activeTab} tab="orders" label="Orders" icon={Package} />
         <NavItem activeTab={activeTab} tab="baguio-sales" label="Baguio Sales" icon={MapPinned} />
-        {activeTab === "baguio-sales" && <BaguioActions />}
       </NavGroup>
       <NavGroup label="Business">
         <NavItem activeTab={activeTab} tab="products" label="Products" icon={Tags} />
@@ -58,14 +55,5 @@ function NavItem({ activeTab, tab, label, icon: Icon }: {
       <Icon />
       <span>{label}</span>
     </a>
-  );
-}
-
-function BaguioActions() {
-  return (
-    <div className="ml-5 grid gap-1 border-l border-[#4a4742] pl-3 max-[800px]:hidden" aria-label="Baguio Sales actions">
-      <a className="!h-9 !gap-2 !px-3 !text-xs" href="#baguio-sales/new-order"><PackagePlus className="!size-4" /><span>New order</span></a>
-      <a className="!h-9 !gap-2 !px-3 !text-xs" href="#baguio-sales/new-dispatch"><Route className="!size-4" /><span>New dispatch</span></a>
-    </div>
   );
 }

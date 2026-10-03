@@ -8,6 +8,8 @@ import type {
   BaguioSaleUpdateInput,
   BaguioClient,
   BaguioClientInput,
+  CustomerAddress,
+  CustomerAddressInput,
   ChannelSaleStatus,
   DeliveryOrderStatus,
   DeliveryReceiptStatus,
@@ -15,10 +17,13 @@ import type {
   DispatchReconciliationInput,
   InventoryLocation,
 } from "../types/channel-sales.js";
-import { loadDispatchDriver, readDispatchDriver } from "./dispatch-driver-account.js";
+import { loadDispatchDriver } from "./dispatch-driver-account.js";
 import { completeDriverDelivery } from "./driver-delivery.js";
-import { readDispatchReconciliation, reconcileAssignedDriverDispatch } from "./dispatch-reconciliation.js";
-import { readBaguioClient } from "./channel-sales-readers.js";
+import { startAssignedDriverTrip } from "./driver-trip.js";
+import { loadDispatchReconciliations, reconcileAssignedDriverDispatch } from "./dispatch-reconciliation.js";
+import { readBaguioClient, readInventoryLocation } from "./channel-sales-readers.js";
+import { customerSelect, saveCustomerAddress } from "./customer-addresses.js";
+import { readBaguioDispatch } from "./channel-sales-dispatch-reader.js";
 import { readSavedDriverDeliveryProof } from "./delivery-proof.js";
 
 export interface ChannelSaleActor {
@@ -35,18 +40,19 @@ export interface ChannelSalesRepository {
   listOnlineClients(limit: number, offset: number): Promise<BaguioClient[]>;
   listCustomers(limit: number, offset: number): Promise<BaguioClient[]>;
   createBaguioClient(input: BaguioClientInput, actor: ChannelSaleActor): Promise<BaguioClient>;
+  createCustomerAddress(customerId: string, input: CustomerAddressInput, actor: ChannelSaleActor): Promise<CustomerAddress>;
   createBaguioSale(input: BaguioSaleInput, actor: ChannelSaleActor): Promise<string>;
   updateBaguioSale(id: string, input: BaguioSaleUpdateInput, actor: ChannelSaleActor): Promise<boolean>;
   createBaguioDispatch(input: BaguioDispatchInput, actor: ChannelSaleActor): Promise<string>;
   advanceBaguioDispatch(id: string, action: BaguioDispatchAction, actor: ChannelSaleActor): Promise<boolean>;
   advanceBaguioSale(id: string, action: BaguioSaleAction, actor: ChannelSaleActor): Promise<boolean>;
   completeDriverDelivery(id: string, proof: DriverDeliveryProof, actor: ChannelSaleActor): Promise<boolean>;
+  startDriverTrip(id: string, actor: ChannelSaleActor): Promise<boolean>;
   reconcileDriverDispatch(id: string, input: DispatchReconciliationInput, actor: ChannelSaleActor): Promise<boolean>;
 }
 
-const saleSelect = "id,reference_number,status,customer_id,dispatch_id,added_after_departure,client_name,client_address,client_phone,delivery_notes,total,created_at,inventory_locations(id,code,name,type),channel_sale_items(product_variant_id,product_title,variant_label,quantity,unit_price,line_total),channel_sale_revisions(id),delivery_order_forms(document_number,status,prepared_by_name),delivery_receipts(document_number,status,client_acknowledged_at,client_signature,signed_at,signed_latitude,signed_longitude,location_accuracy,signed_by_driver_user_id,payment_mode)";
-const reconciliationSelect = "baguio_dispatch_reconciliations(submitted_at,total_collected,notes,baguio_dispatch_reconciliation_orders(order_id,outcome,collected_amount,failure_reason),baguio_dispatch_reconciliation_inventory(product_variant_id,product_title,variant_label,allocated_quantity,delivered_quantity,returned_quantity,damaged_quantity,missing_quantity,remaining_quantity,notes))";
-const dispatchSelect = `id,reference_number,status,van_location_id,driver_user_id,driver_name,driver_email,notes,created_at,departed_at,inventory_locations(id,code,name,type),${reconciliationSelect}`;
+const saleSelect = "id,reference_number,status,customer_id,customer_address_id,dispatch_id,added_after_departure,client_name,client_address,client_phone,delivery_notes,total,created_at,inventory_locations(id,code,name,type),channel_sale_items(product_variant_id,product_title,variant_label,quantity,unit_price,line_total),channel_sale_revisions(id),delivery_order_forms(document_number,status,prepared_by_name),delivery_receipts(document_number,status,client_acknowledged_at,client_signature,signed_at,signed_latitude,signed_longitude,location_accuracy,signed_by_driver_user_id,payment_mode,collected_amount)";
+const dispatchSelect = "id,reference_number,status,van_location_id,driver_user_id,driver_name,driver_email,notes,created_at,departed_at,inventory_locations(id,code,name,type)";
 const allocationSelect = "dispatch_id,order_id,order_reference_number,client_name,product_variant_id,product_title,variant_label,quantity";
 
 export function createSupabaseChannelSalesRepository(url: string, secretKey: string): ChannelSalesRepository {
@@ -78,7 +84,9 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       const allocationValue: unknown = await allocations.json();
       if (!Array.isArray(dispatchValue) || !Array.isArray(salesValue) || !Array.isArray(allocationValue)) throw new Error("Baguio dispatch storage returned invalid data.");
       const parsedSales = salesValue.map(readSale);
-      return dispatchValue.map((value) => readDispatch(value, parsedSales, allocationValue));
+      const dispatchIds = dispatchValue.map((value) => readRecordId(value));
+      const reconciliations = await loadDispatchReconciliations(url, secretKey, dispatchIds);
+      return dispatchValue.map((value) => readBaguioDispatch(value, parsedSales, allocationValue, reconciliations));
     },
     async listVans() {
       assertConfigured();
@@ -86,11 +94,11 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       if (!response.ok) throw new Error("Inventory locations request failed.");
       const value: unknown = await response.json();
       if (!Array.isArray(value)) throw new Error("Inventory locations returned invalid data.");
-      return value.map(readLocation);
+      return value.map(readInventoryLocation);
     },
     async listBaguioClients(limit, offset) {
       assertConfigured();
-      const select = "id,reference_number,business_name,first_name,last_name,default_address,default_shipping_address,phone,email,contact_person,is_active,created_at,customer_sales_channels!inner(channel_code)";
+      const select = `${customerSelect},customer_sales_channels!inner(channel_code)`;
       const response = await fetch(`${url}/rest/v1/customers?select=${encodeURIComponent(select)}&customer_sales_channels.channel_code=eq.baguio&order=business_name.asc.nullslast,first_name.asc&limit=${limit}&offset=${offset}`, { headers: requestHeaders });
       if (!response.ok) throw new Error("Baguio client directory request failed.");
       const value: unknown = await response.json();
@@ -99,7 +107,7 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
     },
     async listOnlineClients(limit, offset) {
       assertConfigured();
-      const select = "id,reference_number,business_name,first_name,last_name,default_address,default_shipping_address,phone,email,contact_person,is_active,created_at,customer_sales_channels!inner(channel_code)";
+      const select = `${customerSelect},customer_sales_channels!inner(channel_code)`;
       const response = await fetch(`${url}/rest/v1/customers?select=${encodeURIComponent(select)}&customer_sales_channels.channel_code=eq.online&order=business_name.asc.nullslast,first_name.asc&limit=${limit}&offset=${offset}`, { headers: requestHeaders });
       if (!response.ok) throw new Error("Online customer directory request failed.");
       const value: unknown = await response.json();
@@ -108,7 +116,7 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
     },
     async listCustomers(limit, offset) {
       assertConfigured();
-      const select = "id,reference_number,business_name,first_name,last_name,default_address,default_shipping_address,phone,email,contact_person,is_active,created_at";
+      const select = customerSelect;
       const response = await fetch(`${url}/rest/v1/customers?select=${encodeURIComponent(select)}&order=business_name.asc.nullslast,first_name.asc&limit=${limit}&offset=${offset}`, { headers: requestHeaders });
       if (!response.ok) throw new Error("Customer directory request failed.");
       const value: unknown = await response.json();
@@ -125,10 +133,14 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       if (!response.ok) throw new Error("Baguio client directory request failed.");
       const id: unknown = await response.json();
       if (typeof id !== "string") throw new Error("Baguio client directory returned invalid data.");
-      const saved = await fetch(`${url}/rest/v1/customers?select=id,reference_number,business_name,first_name,last_name,default_address,default_shipping_address,phone,email,contact_person,is_active,created_at&id=eq.${encodeURIComponent(id)}`, { headers: requestHeaders });
+      const saved = await fetch(`${url}/rest/v1/customers?select=${encodeURIComponent(customerSelect)}&id=eq.${encodeURIComponent(id)}`, { headers: requestHeaders });
       const value: unknown = await saved.json();
       if (!saved.ok || !Array.isArray(value) || !value[0]) throw new Error("Baguio client directory returned invalid data.");
       return readBaguioClient(value[0]);
+    },
+    async createCustomerAddress(customerId, input, actor) {
+      assertConfigured();
+      return saveCustomerAddress(url, requestHeaders, customerId, input, actor);
     },
     async createBaguioSale(input, actor) {
       assertConfigured();
@@ -137,6 +149,7 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
         headers: requestHeaders,
         body: JSON.stringify({
           selected_customer_id: input.customerId,
+          selected_customer_address_id: input.customerAddressId,
           selected_dispatch_id: input.dispatchId,
           prepared_by_name: actor.name,
           order_notes: input.deliveryNotes,
@@ -205,6 +218,10 @@ export function createSupabaseChannelSalesRepository(url: string, secretKey: str
       assertConfigured();
       return completeDriverDelivery(url, secretKey, id, proof, actor);
     },
+    async startDriverTrip(id, actor) {
+      assertConfigured();
+      return startAssignedDriverTrip(url, secretKey, id, actor);
+    },
     async reconcileDriverDispatch(id, input, actor) {
       assertConfigured();
       return reconcileAssignedDriverDispatch(url, secretKey, id, input, actor);
@@ -220,7 +237,8 @@ function readSale(value: unknown): BaguioSale {
   return {
     id: readString(value.id), referenceNumber: readString(value.reference_number), status: readSaleStatus(value.status),
     clientName: readString(value.client_name), clientAddress: readString(value.client_address), clientPhone: readString(value.client_phone), customerId: readString(value.customer_id), dispatchId: readString(value.dispatch_id), addedAfterDeparture: readBoolean(value.added_after_departure), revisionCount: readArray(value.channel_sale_revisions).length,
-    deliveryNotes: readString(value.delivery_notes), van: readLocation(value.inventory_locations), total: readNumber(value.total), createdAt: readString(value.created_at),
+    customerAddressId: readNullableString(value.customer_address_id),
+    deliveryNotes: readString(value.delivery_notes), van: readInventoryLocation(value.inventory_locations), total: readNumber(value.total), createdAt: readString(value.created_at),
     deliveryOrder: { number: readString(deliveryOrder.document_number), status: readDeliveryOrderStatus(deliveryOrder.status), preparedByName: readString(deliveryOrder.prepared_by_name) },
     deliveryReceipt: {
       number: readString(deliveryReceipt.document_number),
@@ -230,31 +248,6 @@ function readSale(value: unknown): BaguioSale {
     },
     items: items.map((item) => ({ productVariantId: readString(item.product_variant_id), productTitle: readString(item.product_title), variantLabel: readString(item.variant_label), quantity: readNumber(item.quantity), unitPrice: readNumber(item.unit_price), lineTotal: readNumber(item.line_total) })),
   };
-}
-
-function readDispatch(value: unknown, sales: BaguioSale[], allocations: unknown[]): BaguioDispatch {
-  if (!isRecord(value) || !isRecord(value.inventory_locations)) throw new Error("Baguio dispatch storage returned invalid data.");
-  const status = readString(value.status);
-  if (!["preparing", "in_transit", "completed", "cancelled"].includes(status)) throw new Error("Baguio dispatch storage returned invalid data.");
-  const id = readString(value.id);
-  return {
-    id, referenceNumber: readString(value.reference_number), status: status as BaguioDispatch["status"],
-    vanLocationId: readString(value.van_location_id), van: readLocation(value.inventory_locations), notes: readString(value.notes),
-    createdAt: readString(value.created_at), departedAt: readNullableString(value.departed_at), orders: sales.filter((sale) => sale.dispatchId === id),
-    driver: readDispatchDriver(value),
-    originalAllocation: allocations.filter(isRecord).filter((row) => row.dispatch_id === id).map((row) => ({
-      orderId: readString(row.order_id), orderReferenceNumber: readString(row.order_reference_number), clientName: readString(row.client_name),
-      productVariantId: readString(row.product_variant_id), productTitle: readString(row.product_title), variantLabel: readString(row.variant_label), quantity: readNumber(row.quantity),
-    })),
-    reconciliation: readDispatchReconciliation(value),
-  };
-}
-
-function readLocation(value: unknown): InventoryLocation {
-  if (!isRecord(value)) throw new Error("Inventory locations returned invalid data.");
-  const type = readString(value.type);
-  if (type !== "factory" && type !== "vehicle") throw new Error("Inventory locations returned invalid data.");
-  return { id: readString(value.id), code: readString(value.code), name: readString(value.name), type };
 }
 
 function readArray(value: unknown): Record<string, unknown>[] {
@@ -269,9 +262,14 @@ function readFirst(value: unknown): Record<string, unknown> {
   return rows[0];
 }
 
+function readRecordId(value: unknown): string {
+  if (!isRecord(value)) throw new Error("Baguio dispatch storage returned invalid data.");
+  return readString(value.id);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function readString(value: unknown): string { if (typeof value !== "string") throw new Error("Channel sales storage returned invalid data."); return value; }
-function readNullableString(value: unknown): string | null { return value === null ? null : readString(value); }
+function readNullableString(value: unknown): string | null { return value == null ? null : readString(value); }
 function readNumber(value: unknown): number { const parsed = typeof value === "number" ? value : Number(value); if (!Number.isFinite(parsed)) throw new Error("Channel sales storage returned invalid data."); return parsed; }
 function readBoolean(value: unknown): boolean { if (typeof value !== "boolean") throw new Error("Channel sales storage returned invalid data."); return value; }
 

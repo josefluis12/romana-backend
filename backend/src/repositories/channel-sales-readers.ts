@@ -1,4 +1,4 @@
-import type { BaguioClient } from "../types/channel-sales.js";
+import type { BaguioClient, CustomerAddress, InventoryLocation } from "../types/channel-sales.js";
 
 export function readBaguioClient(value: unknown): BaguioClient {
   if (!isRecord(value)) throw new Error("Baguio client directory returned invalid data.");
@@ -8,11 +8,37 @@ export function readBaguioClient(value: unknown): BaguioClient {
     name: readCustomerName(value),
     address: readString(value.default_address),
     structuredAddress: readAddress(value.default_shipping_address),
+    addresses: readAddresses(value.customer_addresses),
     phone: readString(value.phone),
     email: readNullableString(value.email) ?? "",
     contactPerson: readString(value.contact_person),
     isActive: readBoolean(value.is_active),
     createdAt: readString(value.created_at),
+  };
+}
+
+export function readCustomerAddress(value: unknown): CustomerAddress {
+  if (!isRecord(value)) throw new Error("Customer directory returned invalid address data.");
+  return {
+    id: readString(value.id),
+    label: readString(value.label),
+    address: requireAddress(value.address),
+    formattedAddress: readString(value.formatted_address),
+    isDefault: readBoolean(value.is_default),
+  };
+}
+
+export function readInventoryLocation(value: unknown): InventoryLocation {
+  if (!isRecord(value)) throw new Error("Inventory locations returned invalid data.");
+  const type = readString(value.type);
+  if (type !== "factory" && type !== "vehicle") {
+    throw new Error("Inventory locations returned invalid data.");
+  }
+  return {
+    id: readString(value.id),
+    code: readString(value.code),
+    name: readString(value.name),
+    type,
   };
 }
 
@@ -31,6 +57,17 @@ function readAddress(value: unknown): BaguioClient["structuredAddress"] {
     postalCode: readString(value.postalCode),
     country: "Philippines",
   };
+}
+
+function requireAddress(value: unknown): CustomerAddress["address"] {
+  const address = readAddress(value);
+  if (!address) throw new Error("Customer directory returned invalid address data.");
+  return address;
+}
+
+function readAddresses(value: unknown): CustomerAddress[] {
+  if (!Array.isArray(value)) throw new Error("Customer directory returned invalid address data.");
+  return value.map(readCustomerAddress).sort((left, right) => Number(right.isDefault) - Number(left.isDefault));
 }
 
 function readCustomerName(value: Record<string, unknown>): string {

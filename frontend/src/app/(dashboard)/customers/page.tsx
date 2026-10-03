@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CustomerAnalytics } from "../../../components/CustomerAnalytics";
-import { createBaguioClient, listBaguioClients, listOnlineCustomers } from "../../../services/channel-sales";
-import type { BaguioClient, BaguioClientInput } from "../../../types/channel-sale";
+import { createBaguioClient, createCustomerAddress, listBaguioClients, listOnlineCustomers } from "../../../services/channel-sales";
+import type { BaguioClient, BaguioClientInput, CustomerAddressInput } from "../../../types/channel-sale";
 import { CustomerDirectory } from "./_components/CustomerDirectory";
 
 export function CustomersPage({ csrfToken }: { csrfToken: string }) {
@@ -28,6 +28,22 @@ export function CustomersPage({ csrfToken }: { csrfToken: string }) {
     try {
       const customer = await createBaguioClient(input, csrfToken);
       setBaguioCustomers((current) => [...current, customer].sort((left, right) => left.name.localeCompare(right.name)));
+    } catch (cause) {
+      setError(messageFor(cause));
+      throw cause;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function addAddress(customerId: string, input: CustomerAddressInput) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const address = await createCustomerAddress(customerId, input, csrfToken);
+      setBaguioCustomers((current) => current.map((customer) => customer.id === customerId
+        ? { ...customer, addresses: [...customer.addresses, address] }
+        : customer));
     } catch (cause) {
       setError(messageFor(cause));
       throw cause;
@@ -71,6 +87,7 @@ export function CustomersPage({ csrfToken }: { csrfToken: string }) {
           channelLabel="Baguio"
           submitting={submitting}
           onRegister={register}
+          onAddAddress={addAddress}
         />
       )}
     </section>

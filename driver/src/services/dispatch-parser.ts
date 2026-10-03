@@ -2,6 +2,7 @@ import type { DriverDispatch, DriverDispatchStatus, DriverOrder } from "../types
 
 const DISPATCH_STATUSES = new Set<DriverDispatchStatus>([
   "preparing",
+  "ready_for_departure",
   "in_transit",
   "completed",
   "cancelled",

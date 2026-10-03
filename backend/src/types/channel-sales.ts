@@ -19,6 +19,7 @@ export interface ChannelSaleItemInput {
 
 export interface BaguioSaleInput {
   customerId: string;
+  customerAddressId: string;
   dispatchId: string;
   deliveryNotes: string;
   items: ChannelSaleItemInput[];
@@ -42,6 +43,7 @@ export interface BaguioSale {
   clientName: string;
   clientAddress: string;
   clientPhone: string;
+  customerAddressId: string | null;
   customerId: string;
   dispatchId: string;
   addedAfterDeparture: boolean;
@@ -64,7 +66,7 @@ export interface BaguioSale {
   items: ChannelSaleItem[];
 }
 
-export type BaguioDispatchStatus = "preparing" | "in_transit" | "completed" | "cancelled";
+export type BaguioDispatchStatus = "preparing" | "ready_for_departure" | "in_transit" | "completed" | "cancelled";
 export type BaguioDispatchAction = "start" | "complete";
 
 export interface SignaturePoint {
@@ -80,12 +82,14 @@ export interface DriverDeliveryProof {
   longitude: number;
   accuracy: number;
   paymentMode: PaymentMode;
+  collectedAmount: number;
 }
 
-export interface SavedDriverDeliveryProof extends Omit<DriverDeliveryProof, "paymentMode"> {
+export interface SavedDriverDeliveryProof extends Omit<DriverDeliveryProof, "paymentMode" | "collectedAmount"> {
   signedAt: string;
   driverUserId: string;
   paymentMode: PaymentMode | null;
+  collectedAmount: number | null;
 }
 
 export interface BaguioDispatchInput {
@@ -119,7 +123,6 @@ export interface DispatchReconciliationInput {
   orders: Array<{
     orderId: string;
     outcome: ReconciliationOrderOutcome;
-    collectedAmount: number;
     failureReason: string;
   }>;
   exceptions: Array<{
@@ -135,7 +138,7 @@ export interface DispatchReconciliation {
   submittedAt: string;
   totalCollected: number;
   notes: string;
-  orders: DispatchReconciliationInput["orders"];
+  orders: Array<DispatchReconciliationInput["orders"][number] & { collectedAmount: number }>;
   inventory: Array<{
     productVariantId: string;
     productTitle: string;
@@ -175,11 +178,23 @@ export interface BaguioClientInput {
   contactPerson: string;
 }
 
+export interface CustomerAddressInput {
+  label: string;
+  address: ShippingAddress;
+}
+
+export interface CustomerAddress extends CustomerAddressInput {
+  id: string;
+  formattedAddress: string;
+  isDefault: boolean;
+}
+
 export interface BaguioClient extends Omit<BaguioClientInput, "address"> {
   id: string;
   referenceNumber: string;
   address: string;
   structuredAddress: ShippingAddress | null;
+  addresses: CustomerAddress[];
   isActive: boolean;
   createdAt: string;
 }

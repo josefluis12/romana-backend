@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import type { User } from "@supabase/supabase-js";
 import type { ChannelSalesRepository } from "../repositories/channel-sales.js";
-import { isUuid, readBaguioDispatchAction, readBaguioSaleAction, validateBaguioClientInput, validateBaguioDispatchInput, validateBaguioSaleInput, validateBaguioSaleUpdateInput } from "../schemas/channel-sales.js";
+import { isUuid, readBaguioDispatchAction, readBaguioSaleAction, validateBaguioClientInput, validateBaguioDispatchInput, validateBaguioSaleInput, validateBaguioSaleUpdateInput, validateCustomerAddressInput } from "../schemas/channel-sales.js";
 import { CSRF_COOKIE, safeEqual } from "../security.js";
 import { getAuthenticatedUserName } from "../authenticated-user.js";
 
@@ -72,7 +72,7 @@ export function registerChannelSalesRoutes(
     try {
       const changed = await channelSales.advanceBaguioDispatch(id, action, actorFor(session.user));
       if (!changed) return response.status(409).json({ error: "Load every order before starting this dispatch." });
-      return response.json({ status: action === "start" ? "in_transit" : "completed" });
+      return response.json({ status: action === "start" ? "ready_for_departure" : "completed" });
     } catch {
       return response.status(503).json({ error: "The dispatch could not be updated." });
     }
@@ -131,6 +131,22 @@ export function registerChannelSalesRoutes(
       return response.status(201).json({ client });
     } catch {
       return response.status(503).json({ error: "The Baguio client could not be registered." });
+    }
+  });
+
+  app.post("/api/customers/:customerId/addresses", async (request, response) => {
+    const session = await resolveSession(request, response);
+    if (!session.user) return response.status(401).json({ error: "Authentication required." });
+    if (!hasValidCsrf(request, session.cookies)) return response.status(403).json({ error: "Forbidden" });
+    const customerId = request.params.customerId;
+    if (!customerId || !isUuid(customerId)) return response.status(400).json({ error: "Invalid customer identifier." });
+    const validation = validateCustomerAddressInput(request.body);
+    if (!validation.address) return response.status(400).json({ error: validation.error });
+    try {
+      const address = await channelSales.createCustomerAddress(customerId, validation.address, actorFor(session.user));
+      return response.status(201).json({ address });
+    } catch {
+      return response.status(503).json({ error: "The customer address could not be saved." });
     }
   });
 

@@ -4,7 +4,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { createApp } from "../src/app.js";
 import type { ChannelSaleActor, ChannelSalesRepository } from "../src/repositories/channel-sales.js";
 import type { AuthService } from "../src/supabase-auth.js";
-import type { BaguioClient, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, InventoryLocation } from "../src/types/channel-sales.js";
+import type { BaguioClient, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, CustomerAddress, DispatchDriver, InventoryLocation } from "../src/types/channel-sales.js";
 import type { SystemUserService } from "../src/services/system-users.js";
 import type { SystemUser } from "../src/types/system-user.js";
 import { structuredAddress } from "./channel-sales.fixtures.js";
@@ -16,7 +16,8 @@ const driver: DispatchDriver = { userId: driverUser.id, name: "Demo Sample Drive
 const actor = { userId: user.id, email: user.email, name: "Maria Santos" };
 const session = { access_token: "access-token", refresh_token: "refresh-token", expires_in: 3600, user } as Session;
 const van: InventoryLocation = { id: "22222222-2222-4222-8222-222222222222", code: "baguio-van-1", name: "Baguio Van 1", type: "vehicle" };
-const client: BaguioClient = { id: "66666666-6666-4666-8666-666666666666", referenceNumber: "BGC-000001", name: "Baguio Market", address: "Session Road, Session Road Area, Baguio City, Benguet, Cordillera Administrative Region (CAR), 2600, Philippines", structuredAddress, phone: "09171234567", email: "buyer@example.com", contactPerson: "Ana Cruz", isActive: true, createdAt: "2026-09-28T00:00:00.000Z" };
+const customerAddress: CustomerAddress = { id: "88888888-8888-4888-8888-888888888888", label: "Main office", address: structuredAddress, formattedAddress: "Session Road, Session Road Area, Baguio City, Benguet, Cordillera Administrative Region (CAR), 2600, Philippines", isDefault: true };
+const client: BaguioClient = { id: "66666666-6666-4666-8666-666666666666", referenceNumber: "BGC-000001", name: "Baguio Market", address: customerAddress.formattedAddress, structuredAddress, addresses: [customerAddress], phone: "09171234567", email: "buyer@example.com", contactPerson: "Ana Cruz", isActive: true, createdAt: "2026-09-28T00:00:00.000Z" };
 const sale: BaguioSale = {
   id: "33333333-3333-4333-8333-333333333333",
   referenceNumber: "BAG-000001",
@@ -24,6 +25,7 @@ const sale: BaguioSale = {
   clientName: "Baguio Market",
   clientAddress: "Session Road, Baguio City",
   clientPhone: "09171234567",
+  customerAddressId: customerAddress.id,
   customerId: client.id,
   dispatchId: "77777777-7777-4777-8777-777777777777",
   addedAfterDeparture: false,
@@ -38,6 +40,7 @@ const sale: BaguioSale = {
 };
 const input: BaguioSaleInput = {
   customerId: client.id,
+  customerAddressId: customerAddress.id,
   dispatchId: sale.dispatchId,
   deliveryNotes: sale.deliveryNotes,
   items: sale.items.map(({ productVariantId, quantity, unitPrice }) => ({ productVariantId, quantity, unitPrice })),
@@ -67,6 +70,7 @@ const repository: ChannelSalesRepository = {
   listOnlineClients: async () => [client],
   listCustomers: async () => [client],
   createBaguioClient: async () => client,
+  createCustomerAddress: async () => customerAddress,
   createBaguioSale: async (nextInput, actor) => {
     created = { input: nextInput, actor };
     return sale.id;
@@ -79,6 +83,7 @@ const repository: ChannelSalesRepository = {
     return allowAdvance;
   },
   completeDriverDelivery: async () => allowAdvance,
+  startDriverTrip: async () => allowAdvance,
   reconcileDriverDispatch: async () => allowAdvance,
 };
 const systemUser: SystemUser = { ...driver, role: "dispatch_driver" };
@@ -119,7 +124,7 @@ test("creates and starts a dispatch that owns multiple orders", async () => {
     assert.deepEqual(createdDispatch, { input: { vanLocationId: van.id, driverUserId: driver.userId, notes: dispatch.notes }, actor });
     const started = await fetch(`${origin}/api/channel-sales/baguio/dispatches/${dispatch.id}/start`, { method: "POST", headers });
     assert.equal(started.status, 200);
-    assert.deepEqual(await started.json(), { status: "in_transit" });
+    assert.deepEqual(await started.json(), { status: "ready_for_departure" });
     assert.deepEqual(advancedDispatch, { id: dispatch.id, action: "start", actor });
   });
 });

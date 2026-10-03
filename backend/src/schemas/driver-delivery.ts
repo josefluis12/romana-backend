@@ -16,6 +16,7 @@ export function validateDriverDeliveryProof(value: unknown): DriverDeliveryValid
   const longitude = readFiniteNumber(value.longitude);
   const accuracy = readFiniteNumber(value.accuracy);
   const paymentMode = readPaymentMode(value.paymentMode);
+  const collectedAmount = readFiniteNumber(value.collectedAmount);
   if (latitude === null || latitude < -90 || latitude > 90) {
     return { error: "A valid delivery latitude is required." };
   }
@@ -26,7 +27,12 @@ export function validateDriverDeliveryProof(value: unknown): DriverDeliveryValid
     return { error: "Valid location accuracy is required." };
   }
   if (!paymentMode) return { error: "Select how the client paid." };
-  return { proof: { signature, latitude, longitude, accuracy, paymentMode } };
+  const amountInCents = collectedAmount === null ? null : collectedAmount * 100;
+  if (collectedAmount === null || collectedAmount <= 0 || collectedAmount > 1_000_000_000
+    || amountInCents === null || Math.abs(amountInCents - Math.round(amountInCents)) > 0.000001) {
+    return { error: "Enter a valid amount collected." };
+  }
+  return { proof: { signature, latitude, longitude, accuracy, paymentMode, collectedAmount } };
 }
 
 function readPaymentMode(value: unknown): PaymentMode | null {

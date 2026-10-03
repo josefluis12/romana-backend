@@ -6,6 +6,7 @@ const signedDate = new Intl.DateTimeFormat("en-PH", {
   dateStyle: "medium",
   timeStyle: "short",
 });
+const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const paymentModeLabels = {
   cash: "Cash",
   gcash: "GCash",
@@ -66,9 +67,15 @@ export function DriverDeliveryProofCard({
             </svg>
           </div>
         </div>
-        <div className="mt-3 border-t border-dashed border-[var(--line)] pt-3 text-xs text-[var(--muted)]">
-          <strong className="block text-[var(--ink)]">Mode of payment</strong>
-          <span className="mt-0.5 block">{proof.paymentMode ? paymentModeLabels[proof.paymentMode] : "Not recorded"}</span>
+        <div className="mt-3 grid gap-3 border-t border-dashed border-[var(--line)] pt-3 text-xs text-[var(--muted)] sm:grid-cols-2">
+          <div>
+            <strong className="block text-[var(--ink)]">Amount collected</strong>
+            <span className="mt-0.5 block">{proof.collectedAmount === null ? "Not recorded" : peso.format(proof.collectedAmount)}</span>
+          </div>
+          <div>
+            <strong className="block text-[var(--ink)]">Mode of payment</strong>
+            <span className="mt-0.5 block">{proof.paymentMode ? paymentModeLabels[proof.paymentMode] : "Not recorded"}</span>
+          </div>
         </div>
         <a
           className="mt-3 flex items-center gap-3 border-t border-dashed border-[var(--line)] pt-3 text-xs text-[var(--muted)] no-underline hover:text-[var(--red)] focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--red)]"

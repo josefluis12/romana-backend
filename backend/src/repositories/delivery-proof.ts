@@ -14,7 +14,13 @@ export function readSavedDriverDeliveryProof(
     accuracy: readNumber(value.location_accuracy),
     driverUserId: readString(value.signed_by_driver_user_id),
     paymentMode: readNullablePaymentMode(value.payment_mode),
+    collectedAmount: readNullableNumber(value.collected_amount),
   };
+}
+
+function readNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  return readNumber(value);
 }
 
 function readNullablePaymentMode(value: unknown): PaymentMode | null {

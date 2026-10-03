@@ -24,7 +24,7 @@ export function BaguioOrdersByDispatch({ dispatches }: { dispatches: BaguioDispa
 
   const searchTerm = query.trim();
   const filteredDispatches = dispatches.filter((dispatch) => {
-    if (filter === "active") return dispatch.status === "preparing" || dispatch.status === "in_transit";
+    if (filter === "active") return ["preparing", "ready_for_departure", "in_transit"].includes(dispatch.status);
     if (filter === "completed") return dispatch.status === "completed";
     return true;
   });
@@ -87,7 +87,7 @@ function FilterTab({ active, children, onClick }: { active: boolean; children: R
 
 function FilteredEmptyState({ filter }: { filter: DispatchFilter }) {
   const description = filter === "active"
-    ? "There are no dispatches currently being prepared or in transit."
+    ? "There are no dispatches currently being prepared, awaiting departure, or in transit."
     : filter === "completed"
       ? "No dispatches have been completed yet."
       : "Create a dispatch before adding its customer orders.";
@@ -160,6 +160,7 @@ function Status({ value }: { value: BaguioDispatch["status"] }) {
 function statusTone(status: string): string {
   if (["completed", "delivered", "successful"].includes(status)) return "bg-emerald-100 text-emerald-700";
   if (status === "in_transit") return "bg-blue-100 text-blue-700";
+  if (status === "ready_for_departure") return "bg-violet-100 text-violet-700";
   if (["approved", "loaded"].includes(status)) return "bg-sky-100 text-sky-700";
   if (["preparing", "pending_approval"].includes(status)) return "bg-amber-100 text-amber-800";
   if (status === "cancelled") return "bg-red-100 text-red-700";

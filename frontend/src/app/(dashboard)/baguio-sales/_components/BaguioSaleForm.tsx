@@ -23,6 +23,7 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
   const firstCustomer = clients.find((client) => client.isActive);
   const [customerId, setCustomerId] = useState(firstCustomer?.id || "");
   const [customerQuery, setCustomerQuery] = useState(firstCustomer ? customerLabel(firstCustomer) : "");
+  const [customerAddressId, setCustomerAddressId] = useState(defaultAddressId(firstCustomer));
   const [productQueries, setProductQueries] = useState<string[]>(firstVariant ? [variantLabel(firstVariant)] : [""]);
   const openDispatches = dispatches.filter((dispatch) => dispatch.status === "preparing" || dispatch.status === "in_transit");
   const [dispatchId, setDispatchId] = useState(openDispatches[0]?.id || "");
@@ -31,7 +32,8 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await onSubmit({ customerId, dispatchId, deliveryNotes, items });
+    if (!customerAddressId) return;
+    await onSubmit({ customerId, customerAddressId, dispatchId, deliveryNotes, items });
   }
 
   function updateVariant(index: number, id: string) {
@@ -42,7 +44,9 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
 
   function chooseCustomer(value: string) {
     setCustomerQuery(value);
-    setCustomerId(clients.find((client) => customerLabel(client) === value && client.isActive)?.id || "");
+    const customer = clients.find((client) => customerLabel(client) === value && client.isActive);
+    setCustomerId(customer?.id || "");
+    setCustomerAddressId(defaultAddressId(customer));
   }
 
   function selectCustomer(option: ComboboxOption) {
@@ -50,6 +54,7 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
     if (!customer) return;
     setCustomerId(customer.id);
     setCustomerQuery(customerLabel(customer));
+    setCustomerAddressId(defaultAddressId(customer));
   }
 
   function chooseVariant(index: number, value: string) {
@@ -78,6 +83,7 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
   }
 
   const visibleCustomers = searchCustomers(clients, customerQuery, customerId);
+  const selectedCustomer = clients.find((client) => client.id === customerId);
 
   function removeItem(index: number) {
     setItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
@@ -92,6 +98,12 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
       </div>
       <div className="mt-6 grid gap-5 md:grid-cols-2">
         <SearchCombobox id="registered-customer" label="Registered customer" wide value={customerQuery} options={visibleCustomers.map((client) => ({ id: client.id, label: customerLabel(client) }))} placeholder="Search name, reference, contact, phone, or email" onChange={chooseCustomer} onSelect={selectCustomer} />
+        <Field label="Delivery address">
+          <select required value={customerAddressId} onChange={(event) => setCustomerAddressId(event.target.value)}>
+            <option value="">Choose a saved address</option>
+            {selectedCustomer?.addresses.map((address) => <option key={address.id} value={address.id}>{address.label} · {address.formattedAddress}</option>)}
+          </select>
+        </Field>
         <div className="grid content-start gap-2 text-sm text-[#4b4944]">
           <span className="font-bold">Prepared by</span>
           <p className="m-0 flex h-11 items-center font-semibold">{preparedByName}</p>
@@ -117,12 +129,14 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
       {!clients.some((client) => client.isActive) && <p className="mt-5 text-sm font-bold text-[var(--red)]">Register a Baguio client before creating an order.</p>}
       {!openDispatches.length && <p className="mt-5 text-sm font-bold text-[var(--red)]">Create a dispatch before adding an order.</p>}
       {openDispatches.some((dispatch) => dispatch.status === "in_transit") && <p className="mt-5 text-xs text-[var(--muted)]">Orders added to an in-transit dispatch are tagged as added during transit and appear only in the current/post-delivery allocation.</p>}
-      <div className="mt-7 flex justify-end"><button className="primary-button compact-button" type="submit" disabled={submitting || !items.length || items.some((item) => !item.productVariantId) || !dispatchId || !customerId}>{submitting ? "Creating…" : "Create order and documents"}</button></div>
+      {selectedCustomer && !selectedCustomer.addresses.length && <p className="mt-5 text-sm font-bold text-[var(--red)]">Add a saved address for this customer from the Customers screen.</p>}
+      <div className="mt-7 flex justify-end"><button className="primary-button compact-button" type="submit" disabled={submitting || !items.length || items.some((item) => !item.productVariantId) || !dispatchId || !customerId || !customerAddressId}>{submitting ? "Creating…" : "Create order and documents"}</button></div>
     </form>
   );
 }
 
 function customerLabel(client: BaguioClient): string { return `${client.name} · ${client.referenceNumber}`; }
+function defaultAddressId(client: BaguioClient | undefined): string { return client?.addresses.find((address) => address.isDefault)?.id || client?.addresses[0]?.id || ""; }
 function variantLabel(variant: { productTitle: string; label: string }): string { return `${variant.productTitle} · ${variant.label}`; }
 
 function Field({ label, wide = false, extraClass = "", children }: { label: string; wide?: boolean; extraClass?: string; children: React.ReactNode }) {

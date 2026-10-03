@@ -1,8 +1,7 @@
 import { fetchWithCsrf } from "./products";
-import type { BaguioClient, BaguioClientInput, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, DispatchDriver, InventoryLocation } from "../types/channel-sale";
+import type { BaguioClient, BaguioClientInput, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, CustomerAddress, CustomerAddressInput, DispatchDriver, InventoryLocation } from "../types/channel-sale";
 
 interface ErrorResponse { error?: string }
-
 export async function listBaguioSales(): Promise<BaguioSale[]> {
   const response = await fetch("/api/channel-sales/baguio", { credentials: "include" });
   const result = await readJson<{ sales: BaguioSale[]; error?: string }>(response);
@@ -74,6 +73,17 @@ export async function createBaguioClient(input: BaguioClientInput, csrfToken: st
   const result = await readJson<{ client?: BaguioClient; error?: string }>(response);
   if (!response.ok || !result.client) throw new Error(result.error || "Unable to register the Baguio client.");
   return result.client;
+}
+
+export async function createCustomerAddress(customerId: string, input: CustomerAddressInput, csrfToken: string): Promise<CustomerAddress> {
+  const response = await fetchWithCsrf(`/api/customers/${customerId}/addresses`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  }, csrfToken);
+  const result = await readJson<{ address?: CustomerAddress; error?: string }>(response);
+  if (!response.ok || !result.address) throw new Error(result.error || "Unable to save the customer address.");
+  return result.address;
 }
 
 export async function createBaguioSale(input: BaguioSaleInput, csrfToken: string): Promise<string> {
