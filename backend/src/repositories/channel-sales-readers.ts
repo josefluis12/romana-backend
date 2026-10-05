@@ -56,6 +56,17 @@ function readAddress(value: unknown): BaguioClient["structuredAddress"] {
     barangay: readString(value.barangay),
     postalCode: readString(value.postalCode),
     country: "Philippines",
+    location: readOptionalLocation(value.location),
+  };
+}
+
+function readOptionalLocation(value: unknown): NonNullable<BaguioClient["structuredAddress"]>["location"] {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) throw new Error("Customer directory returned invalid address data.");
+  return {
+    placeId: readString(value.placeId),
+    latitude: readNumber(value.latitude),
+    longitude: readNumber(value.longitude),
   };
 }
 
@@ -90,5 +101,12 @@ function readNullableString(value: unknown): string | null {
 
 function readBoolean(value: unknown): boolean {
   if (typeof value !== "boolean") throw new Error("Baguio client directory returned invalid data.");
+  return value;
+}
+
+function readNumber(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error("Customer directory returned invalid address data.");
+  }
   return value;
 }

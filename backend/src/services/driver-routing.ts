@@ -2,11 +2,9 @@ import type { BaguioSale } from "../types/channel-sales.js";
 
 const MAX_STATIC_MAP_STOPS = 15;
 const MAX_NAVIGATION_STOPS = 10;
-
-interface DriverOrigin {
-  latitude: number;
-  longitude: number;
-}
+const DRIVER_MAP_CENTER = "Baguio City, Benguet";
+const DRIVER_MAP_ZOOM = 12;
+export const DRIVER_ROUTE_ORIGIN = "744 De Vera St, Mangaldan, Pangasinan";
 
 export interface DriverNavigationRoute {
   googleMapsUrl: string;
@@ -17,7 +15,7 @@ export interface DriverNavigationRoute {
 export interface DriverRoutingService {
   readonly isConfigured: boolean;
   createStaticMap(orders: BaguioSale[]): Promise<{ bytes: ArrayBuffer; contentType: string }>;
-  createNavigationRoute(origin: DriverOrigin, orders: BaguioSale[]): Promise<DriverNavigationRoute>;
+  createNavigationRoute(orders: BaguioSale[]): Promise<DriverNavigationRoute>;
 }
 
 export function createGoogleDriverRoutingService(apiKey: string): DriverRoutingService {
@@ -25,37 +23,47 @@ export function createGoogleDriverRoutingService(apiKey: string): DriverRoutingS
     isConfigured: Boolean(apiKey),
     async createStaticMap(orders) {
       assertConfigured(apiKey);
-      const mapUrl = buildStaticMapUrl(apiKey, orders.slice(0, MAX_STATIC_MAP_STOPS));
+      const visibleOrders = [
+        ...orders.filter(isPendingOrder),
+        ...orders.filter((order) => !isPendingOrder(order)),
+      ].slice(0, MAX_STATIC_MAP_STOPS);
+      const pendingOrders = visibleOrders.filter(isPendingOrder);
+      const route = pendingOrders.length ? await optimizeStops(apiKey, pendingOrders) : null;
+      const orderedOrders = route
+        ? [...route.orders, ...visibleOrders.filter((order) => !isPendingOrder(order))]
+        : visibleOrders;
+      const mapUrl = buildStaticMapUrl(apiKey, orderedOrders, route?.encodedPolyline);
       const response = await fetch(mapUrl);
       const contentType = response.headers.get("content-type") || "";
       if (!response.ok || !contentType.startsWith("image/")) throw new Error("Static route map request failed.");
       return { bytes: await response.arrayBuffer(), contentType };
     },
-    async createNavigationRoute(origin, orders) {
+    async createNavigationRoute(orders) {
       assertConfigured(apiKey);
-      if (!orders.length) throw new Error("This dispatch has no delivery stops.");
-      const included = orders.slice(0, MAX_NAVIGATION_STOPS);
-      const ordered = included.length === 1 ? included : await optimizeStops(apiKey, origin, included);
+      const pendingOrders = orders.filter(isPendingOrder);
+      if (!pendingOrders.length) throw new Error("This dispatch has no pending delivery stops.");
+      const included = pendingOrders.slice(0, MAX_NAVIGATION_STOPS);
+      const ordered = included.length === 1 ? included : (await optimizeStops(apiKey, included)).orders;
       return {
-        googleMapsUrl: buildGoogleMapsUrl(origin, ordered),
+        googleMapsUrl: buildGoogleMapsUrl(ordered),
         optimizedOrderIds: ordered.map((order) => order.id),
-        omittedStopCount: Math.max(0, orders.length - included.length),
+        omittedStopCount: Math.max(0, pendingOrders.length - included.length),
       };
     },
   };
 }
 
-async function optimizeStops(apiKey: string, origin: DriverOrigin, orders: BaguioSale[]): Promise<BaguioSale[]> {
+async function optimizeStops(apiKey: string, orders: BaguioSale[]): Promise<{ orders: BaguioSale[]; encodedPolyline: string }> {
   const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex",
+      "X-Goog-FieldMask": "routes.optimizedIntermediateWaypointIndex,routes.polyline.encodedPolyline",
     },
     body: JSON.stringify({
-      origin: waypointForOrigin(origin),
-      destination: waypointForOrigin(origin),
+      origin: { address: DRIVER_ROUTE_ORIGIN },
+      destination: { address: DRIVER_ROUTE_ORIGIN },
       intermediates: orders.map((order) => ({ address: order.clientAddress })),
       travelMode: "DRIVE",
       routingPreference: "TRAFFIC_AWARE",
@@ -64,17 +72,24 @@ async function optimizeStops(apiKey: string, origin: DriverOrigin, orders: Bagui
   });
   if (!response.ok) throw new Error("Route optimization request failed.");
   const value: unknown = await response.json();
-  const indexes = readOptimizedIndexes(value, orders.length);
-  return indexes.map((index) => orders[index]!);
+  const route = readRoute(value, orders.length);
+  return {
+    orders: route.indexes.map((index) => orders[index]!),
+    encodedPolyline: route.encodedPolyline,
+  };
 }
 
-function buildStaticMapUrl(apiKey: string, orders: BaguioSale[]): string {
+function buildStaticMapUrl(apiKey: string, orders: BaguioSale[], encodedPolyline?: string): string {
   const url = new URL("https://maps.googleapis.com/maps/api/staticmap");
   url.searchParams.set("size", "640x360");
   url.searchParams.set("scale", "2");
   url.searchParams.set("format", "png");
   url.searchParams.set("maptype", "roadmap");
+  url.searchParams.set("center", DRIVER_MAP_CENTER);
+  url.searchParams.set("zoom", String(DRIVER_MAP_ZOOM));
   url.searchParams.set("key", apiKey);
+  url.searchParams.append("markers", `color:0x1565C0|label:D|${DRIVER_ROUTE_ORIGIN}`);
+  if (encodedPolyline) url.searchParams.append("path", `color:0x1565C0|weight:5|enc:${encodedPolyline}`);
   orders.forEach((order, index) => {
     const marker = `color:${markerColor(order.status)}|label:${markerLabel(index)}|${order.clientAddress}`;
     url.searchParams.append("markers", marker);
@@ -82,12 +97,12 @@ function buildStaticMapUrl(apiKey: string, orders: BaguioSale[]): string {
   return url.toString();
 }
 
-function buildGoogleMapsUrl(origin: DriverOrigin, orders: BaguioSale[]): string {
+function buildGoogleMapsUrl(orders: BaguioSale[]): string {
   const url = new URL("https://www.google.com/maps/dir/");
   const destination = orders.at(-1);
   if (!destination) throw new Error("This dispatch has no delivery stops.");
   url.searchParams.set("api", "1");
-  url.searchParams.set("origin", `${origin.latitude},${origin.longitude}`);
+  url.searchParams.set("origin", DRIVER_ROUTE_ORIGIN);
   url.searchParams.set("destination", destination.clientAddress);
   url.searchParams.set("travelmode", "driving");
   url.searchParams.set("dir_action", "navigate");
@@ -95,14 +110,21 @@ function buildGoogleMapsUrl(origin: DriverOrigin, orders: BaguioSale[]): string 
   return url.toString();
 }
 
-function readOptimizedIndexes(value: unknown, count: number): number[] {
+function readRoute(value: unknown, count: number): { indexes: number[]; encodedPolyline: string } {
   if (!isRecord(value) || !Array.isArray(value.routes) || !isRecord(value.routes[0])) throw new Error("Route optimization returned invalid data.");
-  const indexes = value.routes[0].optimizedIntermediateWaypointIndex;
+  const selectedRoute = value.routes[0];
+  const returnedIndexes = selectedRoute.optimizedIntermediateWaypointIndex;
+  const indexes = count === 1 && Array.isArray(returnedIndexes) && returnedIndexes.length === 1 && returnedIndexes[0] === -1
+    ? [0]
+    : returnedIndexes;
   if (!Array.isArray(indexes) || indexes.length !== count || !indexes.every((index) => Number.isInteger(index) && Number(index) >= 0 && Number(index) < count)) {
     throw new Error("Route optimization returned invalid waypoint order.");
   }
   if (new Set(indexes).size !== count) throw new Error("Route optimization returned duplicate waypoints.");
-  return indexes.map(Number);
+  if (!isRecord(selectedRoute.polyline) || typeof selectedRoute.polyline.encodedPolyline !== "string") {
+    throw new Error("Route optimization returned an invalid route path.");
+  }
+  return { indexes: indexes.map(Number), encodedPolyline: selectedRoute.polyline.encodedPolyline };
 }
 
 function markerColor(status: string): string {
@@ -115,8 +137,8 @@ function markerLabel(index: number): string {
   return index < 9 ? String(index + 1) : String.fromCharCode(65 + index - 9);
 }
 
-function waypointForOrigin(origin: DriverOrigin) {
-  return { location: { latLng: origin } };
+function isPendingOrder(order: BaguioSale): boolean {
+  return !["delivered", "successful", "cancelled"].includes(order.status);
 }
 
 function assertConfigured(apiKey: string): void {

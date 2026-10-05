@@ -58,14 +58,30 @@ export function registerDispatchDriverRoutes(
     }
   });
 
+  app.get("/api/channel-sales/baguio/dispatches/:dispatchId/map", async (request, response) => {
+    const session = await resolveSession(request, response);
+    if (!session.user) return response.status(401).json({ error: "Authentication required." });
+    if (isDispatchDriver(session.user)) return response.status(403).json({ error: "Administrator access required." });
+    const dispatchId = request.params.dispatchId;
+    if (!dispatchId || !isUuid(dispatchId)) return response.status(400).json({ error: "Invalid dispatch identifier." });
+    if (!driverRouting.isConfigured) return response.status(503).json({ error: "Driver maps have not been configured." });
+    try {
+      const dispatch = (await channelSales.listBaguioDispatches()).find((item) => item.id === dispatchId);
+      if (!dispatch) return response.status(404).json({ error: "Dispatch not found." });
+      const map = await driverRouting.createStaticMap(dispatch.orders);
+      response.set({ "Cache-Control": "private, max-age=30", "Content-Type": map.contentType });
+      return response.send(Buffer.from(map.bytes));
+    } catch {
+      return response.status(503).json({ error: "The dispatch route map is unavailable." });
+    }
+  });
+
   app.post("/api/driver/dispatches/:dispatchId/route", async (request, response) => {
     const assignment = await resolveDriverAssignment(request, response, channelSales, resolveSession);
     if (!assignment) return;
     if (!driverRouting.isConfigured) return response.status(503).json({ error: "Driver routing has not been configured." });
-    const origin = readOrigin(request.body);
-    if (!origin) return response.status(400).json({ error: "A valid current location is required." });
     try {
-      return response.json(await driverRouting.createNavigationRoute(origin, assignment.dispatch.orders));
+      return response.json(await driverRouting.createNavigationRoute(assignment.dispatch.orders));
     } catch {
       return response.status(503).json({ error: "The best route could not be calculated." });
     }
@@ -174,15 +190,4 @@ async function resolveDriverAssignment(
     response.status(503).json({ error: "Assigned dispatches are unavailable." });
     return null;
   }
-}
-
-function readOrigin(value: unknown): { latitude: number; longitude: number } | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  const latitude = record.latitude;
-  const longitude = record.longitude;
-  return typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
-    && typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180
-    ? { latitude, longitude }
-    : null;
 }

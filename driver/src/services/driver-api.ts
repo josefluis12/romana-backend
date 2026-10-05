@@ -32,14 +32,12 @@ export async function fetchOptimizedDriverRoute(
   apiUrl: string,
   accessToken: string,
   dispatchId: string,
-  origin: { latitude: number; longitude: number },
 ): Promise<DriverNavigationRoute> {
   let response: Response;
   try {
     response = await fetch(`${apiUrl}/api/driver/dispatches/${encodeURIComponent(dispatchId)}/route`, {
       method: "POST",
-      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify(origin),
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
     });
   } catch {
     throw new DriverApiError("Unable to calculate the route. Check your connection and try again.", 0);

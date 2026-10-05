@@ -13,15 +13,25 @@ interface Props {
 
 export function DispatchCoverageMap({ accessToken, apiUrl, dispatch, disabled, onOpenRoute }: Props) {
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const revision = dispatch.orders.map((order) => `${order.id}:${order.status}`).join(",");
-  const uri = `${apiUrl}/api/driver/dispatches/${encodeURIComponent(dispatch.id)}/map?revision=${encodeURIComponent(revision)}`;
+  const uri = `${apiUrl}/api/driver/dispatches/${encodeURIComponent(dispatch.id)}/map?revision=${encodeURIComponent(revision)}&attempt=${attempt}`;
+
+  const handleMapPress = () => {
+    if (failed) {
+      setFailed(false);
+      setAttempt((value) => value + 1);
+      return;
+    }
+    onOpenRoute();
+  };
 
   return (
     <View style={styles.section}>
       <View style={styles.titleRow}>
         <View>
           <Text style={styles.title}>Delivery coverage</Text>
-          <Text style={styles.subtitle}>Tap the map to open the optimized route</Text>
+          <Text style={styles.subtitle}>{disabled ? "Route is unavailable while updating or after all stops close" : "Tap the map to open the optimized route"}</Text>
         </View>
         <View style={styles.legend}>
           <Legend color={colors.warning} label="Pending" />
@@ -29,19 +39,19 @@ export function DispatchCoverageMap({ accessToken, apiUrl, dispatch, disabled, o
           <Legend color={colors.danger} label="Exception" />
         </View>
       </View>
-      <Pressable accessibilityHint="Calculates the best stop order and opens Google Maps" accessibilityRole="button" disabled={disabled} onPress={onOpenRoute} style={({ pressed }) => [styles.mapFrame, pressed && styles.pressed, disabled && styles.disabled]}>
+      <Pressable accessibilityHint={failed ? "Retries the delivery coverage map" : "Calculates the best stop order and opens Google Maps"} accessibilityRole="button" disabled={disabled && !failed} onPress={handleMapPress} style={({ pressed }) => [styles.mapFrame, pressed && styles.pressed, disabled && !failed && styles.disabled]}>
         {!failed ? (
           <Image
             accessibilityLabel={`Map of ${dispatch.orders.length} delivery stops`}
             onError={() => setFailed(true)}
             resizeMode="cover"
-            source={{ uri, headers: { Authorization: `Bearer ${accessToken}` } }}
+            source={{ uri, headers: { Accept: "image/png", Authorization: `Bearer ${accessToken}` }, cache: "reload" }}
             style={styles.map}
           />
         ) : (
           <View style={styles.fallback}>
             <Text style={styles.fallbackTitle}>Coverage map unavailable</Text>
-            <Text style={styles.fallbackBody}>Tap here to open the delivery stops in Google Maps.</Text>
+            <Text style={styles.fallbackBody}>Tap here to try loading the map again.</Text>
           </View>
         )}
       </Pressable>

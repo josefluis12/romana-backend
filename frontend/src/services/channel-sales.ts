@@ -1,7 +1,25 @@
 import { fetchWithCsrf } from "./products";
-import type { BaguioClient, BaguioClientInput, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, CustomerAddress, CustomerAddressInput, DispatchDriver, InventoryLocation } from "../types/channel-sale";
+import type { BaguioClient, BaguioClientInput, BaguioDispatch, BaguioDispatchAction, BaguioDispatchInput, BaguioSale, BaguioSaleAction, BaguioSaleInput, BaguioSaleUpdateInput, CustomerAddress, CustomerAddressInput, DispatchDriver, InventoryLocation, PhilippineAddress } from "../types/channel-sale";
 
 interface ErrorResponse { error?: string }
+export interface CustomerPlacePrediction { placeId: string; address: string }
+export interface ResolvedCustomerPlace { placeId: string; formattedAddress: string; address: PhilippineAddress }
+
+export async function searchCustomerLocations(input: string, sessionToken: string, signal?: AbortSignal): Promise<CustomerPlacePrediction[]> {
+  const query = new URLSearchParams({ input, sessionToken });
+  const response = await fetch(`/api/customer-locations/autocomplete?${query}`, { credentials: "include", signal });
+  const result = await readJson<{ predictions?: CustomerPlacePrediction[]; error?: string }>(response);
+  if (!response.ok || !result.predictions) throw new Error(result.error || "Address suggestions are unavailable.");
+  return result.predictions;
+}
+
+export async function getCustomerLocation(placeId: string, sessionToken: string): Promise<ResolvedCustomerPlace> {
+  const query = new URLSearchParams({ sessionToken });
+  const response = await fetch(`/api/customer-locations/places/${encodeURIComponent(placeId)}?${query}`, { credentials: "include" });
+  const result = await readJson<{ place?: ResolvedCustomerPlace; error?: string }>(response);
+  if (!response.ok || !result.place) throw new Error(result.error || "The selected address could not be loaded.");
+  return result.place;
+}
 export async function listBaguioSales(): Promise<BaguioSale[]> {
   const response = await fetch("/api/channel-sales/baguio", { credentials: "include" });
   const result = await readJson<{ sales: BaguioSale[]; error?: string }>(response);

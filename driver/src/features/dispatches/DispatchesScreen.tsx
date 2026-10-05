@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "expo-router";
 import * as Linking from "expo-linking";
-import * as Location from "expo-location";
 import {
   ActivityIndicator,
   FlatList,
@@ -103,19 +102,23 @@ export function DispatchesScreen({ view }: DispatchesScreenProps) {
     setNavigatingDispatchId(dispatch.id);
     setError(null);
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== "granted") throw new Error("Allow location access to calculate the best route from your current position.");
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const route = await fetchOptimizedDriverRoute(config.apiUrl, session.access_token, dispatch.id, {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+      const route = await fetchOptimizedDriverRoute(config.apiUrl, session.access_token, dispatch.id);
       await Linking.openURL(route.googleMapsUrl);
       if (route.omittedStopCount > 0) setError(`${route.omittedStopCount} additional stop${route.omittedStopCount === 1 ? " was" : "s were"} not included because Google Maps supports a limited number of navigation waypoints.`);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "The best route could not be opened.");
     } finally {
       setNavigatingDispatchId(null);
+    }
+  };
+
+  const handleOpenOrderMap = async (order: DriverOrder) => {
+    setError(null);
+    try {
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.clientAddress)}`;
+      await Linking.openURL(url);
+    } catch {
+      setError("This delivery address could not be opened in Google Maps.");
     }
   };
 
@@ -191,13 +194,14 @@ export function DispatchesScreen({ view }: DispatchesScreenProps) {
         )}
         renderItem={({ item }) => (
           <DispatchCard
-            accessToken={session.access_token}
+            accessToken={session?.access_token || ""}
             apiUrl={config?.apiUrl || ""}
             dispatch={item}
             interactive={view === "active"}
             isNavigating={navigatingDispatchId === item.id}
             isStarting={startingDispatchId === item.id}
             onDeliver={setSelectedOrder}
+            onOpenOrderMap={(order) => void handleOpenOrderMap(order)}
             onReconcile={setReconcilingDispatch}
             onNavigate={(dispatch) => void handleOpenRoute(dispatch)}
             onStart={(dispatch) => void handleStartTrip(dispatch)}

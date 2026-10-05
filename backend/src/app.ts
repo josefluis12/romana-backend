@@ -28,6 +28,7 @@ import { registerSystemUserRoutes } from "./routes/system-users.js";
 import { createSessionManager, type ResolvedSession } from "./session-manager.js";
 import { isUuid } from "./schemas/channel-sales.js";
 import { createGoogleDriverRoutingService, type DriverRoutingService } from "./services/driver-routing.js";
+import { registerCustomerLocationRoutes } from "./routes/customer-locations.js";
 interface AppDependencies {
   auth?: AuthService;
   products?: ProductRepository;
@@ -177,6 +178,7 @@ export function createApp({
 
   registerOrderRoutes(app, orders, maya, resolveSession);
   registerChannelSalesRoutes(app, channelSales, resolveSession);
+  registerCustomerLocationRoutes(app, resolveSession, config.googleMapsApiKey);
   registerDispatchDriverRoutes(app, systemUsers, channelSales, driverRouting, resolveSession);
   registerSystemUserRoutes(app, systemUsers, resolveSession);
 

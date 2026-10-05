@@ -78,6 +78,11 @@ const checkoutDetails = {
     barangay: "Barangay 1",
     postalCode: "1000",
     country: "Philippines",
+    location: {
+      placeId: "ChIJTestPlace",
+      latitude: 14.5995,
+      longitude: 120.9842,
+    },
   },
   deliveryNotes: "Ring the bell",
 };
@@ -108,7 +113,39 @@ test("creates a Maya checkout using catalog prices", async () => {
     assert.equal(pendingCheckout?.customer.email, "shopper@example.com");
     assert.equal(pendingCheckout?.customer.phone, "+639123456789");
     assert.equal(pendingCheckout?.total, 640);
+    assert.deepEqual(pendingCheckout?.shippingAddress.location, checkoutDetails.shippingAddress.location);
     assert.equal(attachedCheckout?.checkoutId, "checkout-id");
+  });
+});
+
+test("requires a valid pinned delivery location", async () => {
+  const maya: MayaCheckoutService = {
+    isConfigured: true,
+    create: async () => ({ checkoutId: "unused", redirectUrl: "https://payments-web-sandbox.maya.ph/payment" }),
+    getPaymentStatus: async () => "PAYMENT_FAILED",
+  };
+  const shippingAddress = { ...checkoutDetails.shippingAddress, location: null };
+  await withServer(maya, async (origin) => {
+    const response = await fetch(`${origin}/api/storefront/checkouts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...checkoutDetails, shippingAddress, items: [{ slug: "cashew-butter", size: "250g", quantity: 1 }] }),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "Confirm the delivery location on the map." });
+
+    const invalidLocation = { ...checkoutDetails.shippingAddress.location, longitude: 181 };
+    const invalidResponse = await fetch(`${origin}/api/storefront/checkouts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...checkoutDetails,
+        shippingAddress: { ...checkoutDetails.shippingAddress, location: invalidLocation },
+        items: [{ slug: "cashew-butter", size: "250g", quantity: 1 }],
+      }),
+    });
+    assert.equal(invalidResponse.status, 400);
+    assert.deepEqual(await invalidResponse.json(), { error: "Choose a valid delivery longitude." });
   });
 });
 

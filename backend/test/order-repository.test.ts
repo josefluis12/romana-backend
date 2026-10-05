@@ -19,6 +19,11 @@ test("reads legacy order activity without shipment metadata", async () => {
       district: "Tondo",
       barangay: "Barangay 1",
       postalCode: "1000",
+      location: {
+        placeId: "ChIJTestPlace",
+        latitude: 14.5995,
+        longitude: 120.9842,
+      },
     },
     delivery_notes: "",
     paid_at: "2026-08-13T00:00:00.000Z",
@@ -57,6 +62,11 @@ test("reads legacy order activity without shipment metadata", async () => {
     assert.equal(orders[0]?.customer.email, "shopper@example.com");
     assert.equal(orders[0]?.customer.id, "55555555-5555-4555-8555-555555555555");
     assert.equal(orders[0]?.activity[0]?.shipment, null);
+    assert.deepEqual(orders[0]?.shippingAddress.location, {
+      placeId: "ChIJTestPlace",
+      latitude: 14.5995,
+      longitude: 120.9842,
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

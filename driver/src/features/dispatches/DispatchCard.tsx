@@ -19,24 +19,26 @@ interface DispatchCardProps {
   isNavigating: boolean;
   isStarting: boolean;
   onDeliver(order: DriverOrder): void;
+  onOpenOrderMap(order: DriverOrder): void;
   onReconcile(dispatch: DriverDispatch): void;
   onStart(dispatch: DriverDispatch): void;
   onNavigate(dispatch: DriverDispatch): void;
   showDate: boolean;
 }
 
-export function DispatchCard({ accessToken, apiUrl, dispatch, interactive, isNavigating, isStarting, onDeliver, onNavigate, onReconcile, onStart, showDate }: DispatchCardProps) {
+export function DispatchCard({ accessToken, apiUrl, dispatch, interactive, isNavigating, isStarting, onDeliver, onNavigate, onOpenOrderMap, onReconcile, onStart, showDate }: DispatchCardProps) {
   const pendingCount = dispatch.status === "ready_for_departure"
     ? dispatch.orders.length
     : dispatch.orders.filter((order) => order.status === "in_transit").length;
   const canStart = interactive && dispatch.status === "ready_for_departure";
   const canReconcile = interactive && dispatch.status === "in_transit" && dispatch.orders.length > 0;
+  const hasPendingStops = dispatch.orders.some((order) => !["delivered", "successful", "cancelled"].includes(order.status));
   return (
     <View style={styles.card}>
       <Pressable
         accessibilityHint={interactive ? "Opens the optimized dispatch route in Google Maps" : undefined}
         accessibilityRole={interactive ? "button" : undefined}
-        disabled={!interactive || isNavigating || !dispatch.orders.length}
+        disabled={!interactive || isNavigating || !hasPendingStops}
         onPress={() => onNavigate(dispatch)}
         style={({ pressed }) => [styles.headingRow, pressed && styles.headingPressed]}
       >
@@ -54,10 +56,11 @@ export function DispatchCard({ accessToken, apiUrl, dispatch, interactive, isNav
       </Text>
       {interactive && dispatch.orders.length > 0 && (
         <DispatchCoverageMap
+          key={dispatch.orders.map((order) => `${order.id}:${order.status}`).join(",")}
           accessToken={accessToken}
           apiUrl={apiUrl}
           dispatch={dispatch}
-          disabled={isNavigating}
+          disabled={isNavigating || !hasPendingStops}
           onOpenRoute={() => onNavigate(dispatch)}
         />
       )}
@@ -83,11 +86,19 @@ export function DispatchCard({ accessToken, apiUrl, dispatch, interactive, isNav
           <View style={styles.stopDetails}>
             <Text numberOfLines={1} style={styles.client}>{order.clientName}</Text>
             <Text numberOfLines={2} style={styles.address}>{order.clientAddress}</Text>
-            <Text style={[styles.orderStatus, order.status === "delivered" && styles.deliveredStatus]}>
+            <Text style={[styles.orderStatus, statusStyle(order.status)]}>
               {order.status === "in_transit"
                 ? interactive ? "Pending delivery" : "Not delivered"
                 : formatStatus(order.status)}
             </Text>
+            <Pressable
+              accessibilityHint="Opens this delivery address in Google Maps"
+              accessibilityRole="link"
+              onPress={() => onOpenOrderMap(order)}
+              style={({ pressed }) => [styles.mapLink, pressed && styles.headingPressed]}
+            >
+              <Text style={styles.mapLinkLabel}>Open in Google Maps ↗</Text>
+            </Pressable>
             {interactive && order.status === "in_transit" && (
               <Pressable
                 accessibilityHint="Opens signature capture for this client"
@@ -116,6 +127,12 @@ export function DispatchCard({ accessToken, apiUrl, dispatch, interactive, isNav
 
 function formatStatus(status: string): string {
   return status.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function statusStyle(status: string) {
+  if (status === "delivered" || status === "successful") return styles.deliveredStatus;
+  if (status === "cancelled") return styles.cancelledStatus;
+  return styles.pendingStatus;
 }
 
 function formatDispatchDate(value: string): string {
@@ -154,6 +171,10 @@ const styles = StyleSheet.create({
   address: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, marginTop: 3 },
   orderStatus: { color: colors.warning, fontFamily: fonts.extraBold, fontSize: 12, marginTop: 7, textTransform: "uppercase" },
   deliveredStatus: { color: colors.success },
+  cancelledStatus: { color: colors.danger },
+  pendingStatus: { color: colors.warning },
+  mapLink: { alignSelf: "flex-start", marginTop: 8, paddingVertical: 3 },
+  mapLinkLabel: { color: colors.primary, fontFamily: fonts.bold, fontSize: 12 },
   startSection: { backgroundColor: colors.surfaceMuted, borderRadius: 12, gap: 6, padding: 14 },
   startTitle: { color: colors.text, fontFamily: fonts.extraBold, fontSize: 15 },
   startBody: { color: colors.textMuted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },

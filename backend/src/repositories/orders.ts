@@ -166,6 +166,7 @@ function readAdminOrder(value: unknown): AdminOrder {
       street: readString(address.street), region: readString(address.region), province: readString(address.province),
       locality: readString(address.locality), district: readString(address.district), barangay: readString(address.barangay),
       postalCode: readString(address.postalCode), country: "Philippines",
+      location: readOptionalDeliveryLocation(address.location),
     },
     items: value.order_items.map((item) => {
       if (!isRecord(item)) throw new Error("Order storage returned invalid data.");
@@ -182,6 +183,16 @@ function readAdminOrder(value: unknown): AdminOrder {
       };
     }).sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     shipment: readOrderShipment(value),
+  };
+}
+
+function readOptionalDeliveryLocation(value: unknown): AdminOrder["shippingAddress"]["location"] {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) throw new Error("Order storage returned invalid data.");
+  return {
+    placeId: readString(value.placeId),
+    latitude: readNumber(value.latitude),
+    longitude: readNumber(value.longitude),
   };
 }
 

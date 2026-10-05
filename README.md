@@ -46,7 +46,7 @@ Required backend variables:
 - `DRIVER_ORIGIN`: the permitted Expo web origin
 - `MAYA_API_URL`: Maya Checkout API origin; use `https://pg-sandbox.paymaya.com` for sandbox
 - `MAYA_PUBLIC_KEY`: the Maya Checkout public key used only by the backend; local sandbox development falls back to Maya's published shared test key
-- `GOOGLE_MAPS_API_KEY`: a backend-only key with Routes API and Maps Static API enabled for driver route optimization and dispatch coverage maps
+- `GOOGLE_MAPS_API_KEY`: a backend-only key with Places API (New), Routes API, and Maps Static API enabled for customer address search and driver routing
 
 Register `https://your-backend.example/api/webhooks/maya` for Maya's
 `PAYMENT_SUCCESS` event. The backend verifies the reported payment with Maya before

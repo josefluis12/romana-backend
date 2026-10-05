@@ -9,6 +9,12 @@ export interface AdminCustomer extends CheckoutCustomer {
   id: string;
 }
 
+export interface DeliveryLocation {
+  placeId: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface ShippingAddress {
   street: string;
   region: string;
@@ -18,6 +24,7 @@ export interface ShippingAddress {
   barangay: string;
   postalCode: string;
   country: "Philippines";
+  location?: DeliveryLocation;
 }
 
 export interface CheckoutDetails {

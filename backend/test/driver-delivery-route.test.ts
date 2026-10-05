@@ -6,6 +6,7 @@ import { registerDispatchDriverRoutes } from "../src/routes/dispatch-drivers.js"
 import type { ChannelSaleActor, ChannelSalesRepository } from "../src/repositories/channel-sales.js";
 import type { DispatchReconciliationInput, DriverDeliveryProof } from "../src/types/channel-sales.js";
 import type { SystemUserService } from "../src/services/system-users.js";
+import type { DriverRoutingService } from "../src/services/driver-routing.js";
 import { withTestServer } from "./test-server.js";
 
 const orderId = "33333333-3333-4333-8333-333333333333";
@@ -103,7 +104,8 @@ function createTestApp() {
   const app = express();
   app.use(express.json());
   const users = { listDrivers: async () => [] } as SystemUserService;
-  registerDispatchDriverRoutes(app, users, createRepository(), async (request) => ({
+  const routing = { isConfigured: false } as DriverRoutingService;
+  registerDispatchDriverRoutes(app, users, createRepository(), routing, async (request) => ({
     user: request.header("authorization") === "Bearer driver-token" ? driver : administrator,
     cookies: {},
   }));

@@ -5,6 +5,7 @@ import { getDispatchLocations } from "../_lib/dispatch-location";
 import { printBaguioDispatchLoadSheet } from "../_lib/print-document";
 import { getBaguioSaleStatusLabel } from "../_lib/workflow";
 import { DispatchLocationMap } from "./DispatchLocationMap";
+import { DispatchRoutePlan } from "./DispatchRoutePlan";
 import { DispatchReconciliationReport } from "./DispatchReconciliationReport";
 import { TripElapsedTimer } from "./TripElapsedTimer";
 
@@ -76,7 +77,7 @@ export function BaguioDispatchDetails({ dispatch, updating, onAdvance }: {
           />
         </div>
         <div id="driver-map-panel" role="tabpanel" aria-labelledby="driver-map-tab" hidden={activeTab !== "map"}>
-          {activeTab === "map" && <DispatchLocationPins locations={locations} />}
+          {activeTab === "map" && <><DispatchRoutePlan dispatch={dispatch} /><DispatchLocationPins locations={locations} /></>}
         </div>
         <div id="reconciliation-panel" role="tabpanel" aria-labelledby="reconciliation-tab" hidden={activeTab !== "reconciliation"}>
           <DispatchReconciliationReport dispatch={dispatch} />

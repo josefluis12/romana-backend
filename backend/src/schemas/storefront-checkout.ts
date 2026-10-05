@@ -1,4 +1,4 @@
-import type { CheckoutDetails, CheckoutCustomer, ShippingAddress } from "../types/order.js";
+import type { CheckoutDetails, CheckoutCustomer, DeliveryLocation, ShippingAddress } from "../types/order.js";
 import { StorefrontCheckoutError } from "../services/storefront-checkout-error.js";
 
 function readRecord(value: unknown, message: string): Record<string, unknown> {
@@ -38,6 +38,23 @@ function normalizePhoneNumber(value: string): string {
   return `+${digits}`;
 }
 
+function readCoordinate(record: Record<string, unknown>, key: string, label: string, minimum: number, maximum: number): number {
+  const value = record[key];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) {
+    throw new StorefrontCheckoutError(`Choose a valid ${label.toLowerCase()}.`);
+  }
+  return value;
+}
+
+function readDeliveryLocation(address: Record<string, unknown>): DeliveryLocation {
+  const location = readRecord(address.location, "Confirm the delivery location on the map.");
+  return {
+    placeId: readText(location, "placeId", "Google Place ID", 255),
+    latitude: readCoordinate(location, "latitude", "delivery latitude", -90, 90),
+    longitude: readCoordinate(location, "longitude", "delivery longitude", -180, 180),
+  };
+}
+
 function readAddress(record: Record<string, unknown>): ShippingAddress {
   const address = readRecord(record.shippingAddress, "Delivery address is required.");
   const country = readText(address, "country", "Country", 80);
@@ -51,6 +68,7 @@ function readAddress(record: Record<string, unknown>): ShippingAddress {
     barangay: readText(address, "barangay", "Barangay", 120),
     postalCode: readText(address, "postalCode", "Postal code", 12),
     country: "Philippines",
+    location: readDeliveryLocation(address),
   };
 }
 

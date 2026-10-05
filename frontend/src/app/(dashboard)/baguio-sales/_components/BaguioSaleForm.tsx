@@ -2,7 +2,9 @@ import { useState, type FormEvent } from "react";
 import { Minus, Plus } from "lucide-react";
 import type { Product } from "../../../../types/product";
 import type { BaguioClient, BaguioDispatch, BaguioSaleInput } from "../../../../types/channel-sale";
+import { getDefaultCustomerAddressId } from "../_lib/customer-address-options";
 import { createVariantOptions, searchCustomers, searchVariants } from "../_lib/order-option-search";
+import { CustomerAddressSelector } from "./CustomerAddressSelector";
 import { SearchCombobox, type ComboboxOption } from "./SearchCombobox";
 
 interface Props {
@@ -23,7 +25,7 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
   const firstCustomer = clients.find((client) => client.isActive);
   const [customerId, setCustomerId] = useState(firstCustomer?.id || "");
   const [customerQuery, setCustomerQuery] = useState(firstCustomer ? customerLabel(firstCustomer) : "");
-  const [customerAddressId, setCustomerAddressId] = useState(defaultAddressId(firstCustomer));
+  const [customerAddressId, setCustomerAddressId] = useState(getDefaultCustomerAddressId(firstCustomer));
   const [productQueries, setProductQueries] = useState<string[]>(firstVariant ? [variantLabel(firstVariant)] : [""]);
   const openDispatches = dispatches.filter((dispatch) => dispatch.status === "preparing" || dispatch.status === "in_transit");
   const [dispatchId, setDispatchId] = useState(openDispatches[0]?.id || "");
@@ -46,7 +48,7 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
     setCustomerQuery(value);
     const customer = clients.find((client) => customerLabel(client) === value && client.isActive);
     setCustomerId(customer?.id || "");
-    setCustomerAddressId(defaultAddressId(customer));
+    setCustomerAddressId(getDefaultCustomerAddressId(customer));
   }
 
   function selectCustomer(option: ComboboxOption) {
@@ -54,7 +56,7 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
     if (!customer) return;
     setCustomerId(customer.id);
     setCustomerQuery(customerLabel(customer));
-    setCustomerAddressId(defaultAddressId(customer));
+    setCustomerAddressId(getDefaultCustomerAddressId(customer));
   }
 
   function chooseVariant(index: number, value: string) {
@@ -98,12 +100,7 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
       </div>
       <div className="mt-6 grid gap-5 md:grid-cols-2">
         <SearchCombobox id="registered-customer" label="Registered customer" wide value={customerQuery} options={visibleCustomers.map((client) => ({ id: client.id, label: customerLabel(client) }))} placeholder="Search name, reference, contact, phone, or email" onChange={chooseCustomer} onSelect={selectCustomer} />
-        <Field label="Delivery address">
-          <select required value={customerAddressId} onChange={(event) => setCustomerAddressId(event.target.value)}>
-            <option value="">Choose a saved address</option>
-            {selectedCustomer?.addresses.map((address) => <option key={address.id} value={address.id}>{address.label} · {address.formattedAddress}</option>)}
-          </select>
-        </Field>
+        <CustomerAddressSelector addresses={selectedCustomer?.addresses ?? []} value={customerAddressId} onChange={setCustomerAddressId} />
         <div className="grid content-start gap-2 text-sm text-[#4b4944]">
           <span className="font-bold">Prepared by</span>
           <p className="m-0 flex h-11 items-center font-semibold">{preparedByName}</p>
@@ -136,7 +133,6 @@ export function BaguioSaleForm({ products, dispatches, clients, preparedByName, 
 }
 
 function customerLabel(client: BaguioClient): string { return `${client.name} · ${client.referenceNumber}`; }
-function defaultAddressId(client: BaguioClient | undefined): string { return client?.addresses.find((address) => address.isDefault)?.id || client?.addresses[0]?.id || ""; }
 function variantLabel(variant: { productTitle: string; label: string }): string { return `${variant.productTitle} · ${variant.label}`; }
 
 function Field({ label, wide = false, extraClass = "", children }: { label: string; wide?: boolean; extraClass?: string; children: React.ReactNode }) {
